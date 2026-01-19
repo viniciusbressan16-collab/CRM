@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { getCurrentPeriodKey } from '../utils/goals';
 
 interface AddGoalModalProps {
     isOpen: boolean;
@@ -62,7 +63,8 @@ export default function AddGoalModal({ isOpen, onClose, onSuccess }: AddGoalModa
                     type: isCustomType ? customType : type,
                     target_value: parseInt(targetValue),
                     current_value: 0,
-                    period
+                    period,
+                    period_key: getCurrentPeriodKey(period)
                 });
 
             if (error) throw error;
@@ -165,6 +167,7 @@ export default function AddGoalModal({ isOpen, onClose, onSuccess }: AddGoalModa
                                 onChange={(e) => setPeriod(e.target.value)}
                                 className="w-full px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl text-gray-900 dark:text-white focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                             >
+                                <option value="Semanal">Semanal</option>
                                 <option value="Mensal">Mensal</option>
                                 <option value="Trimestral">Trimestral</option>
                                 <option value="Semestral">Semestral</option>

@@ -21,13 +21,14 @@ interface PipelineListViewProps {
     getTagColor: (tag: string) => string;
 }
 
-type ColumnKey = 'client_name' | 'pipeline_id' | 'value' | 'recovered_value' | 'tag' | 'status' | 'contact_name' | 'email' | 'phone' | 'created_at';
+type ColumnKey = string; // Changed from fixed union to string to support dynamic keys
 
 interface ColumnConfig {
     key: ColumnKey;
     label: string;
     visible: boolean;
-    locked?: boolean; // If true, cannot be hidden/moved (e.g. client_name)
+    locked?: boolean;
+    isCustom?: boolean; // Identify if it's a dynamic field
 }
 
 const DEFAULT_COLUMNS: ColumnConfig[] = [
@@ -47,6 +48,35 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
     const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
     const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+
+    // Dynamic Column Synchronization: Update config when deals change to include new custom fields
+    useEffect(() => {
+        const customKeys = new Set<string>();
+        deals.forEach(deal => {
+            if (deal.custom_fields && typeof deal.custom_fields === 'object' && !Array.isArray(deal.custom_fields)) {
+                Object.keys(deal.custom_fields).forEach(key => customKeys.add(key));
+            }
+        });
+
+        if (customKeys.size > 0) {
+            setColumnConfig(prev => {
+                const newConfig = [...prev];
+                let changed = false;
+                customKeys.forEach(key => {
+                    if (!newConfig.find(c => c.key === key)) {
+                        newConfig.push({
+                            key: key,
+                            label: key, // Label is same as key for custom fields
+                            visible: false,
+                            isCustom: true
+                        });
+                        changed = true;
+                    }
+                });
+                return changed ? newConfig : prev;
+            });
+        }
+    }, [deals]);
 
     // --- Helpers ---
     const getStageName = (pipelineId: string | null) => {
@@ -97,6 +127,23 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
         }
     };
 
+    // New handler for custom fields
+    const handleCustomFieldChange = async (dealId: string, field: string, value: string) => {
+        const deal = deals.find(d => d.id === dealId);
+        if (!deal) return;
+
+        const currentFields = (deal.custom_fields as Record<string, any>) || {};
+        const newFields = { ...currentFields, [field]: value };
+
+        if (selectedDealIds.has(dealId)) {
+            if (confirm(`Aplicar alteração para ${selectedDealIds.size} itens selecionados?`)) {
+                await onBatchUpdate(Array.from(selectedDealIds), { custom_fields: newFields });
+            }
+        } else {
+            await onBatchUpdate([dealId], { custom_fields: newFields });
+        }
+    };
+
     // --- Column Config Logic ---
     const toggleColumnVisibility = (key: ColumnKey) => {
         setColumnConfig(prev => prev.map(c => c.key === key ? { ...c, visible: !c.visible } : c));
@@ -135,8 +182,9 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                     disabled={col.locked}
                                     className="rounded border-gray-300 text-primary focus:ring-primary"
                                 />
-                                <span className={`text-sm flex-1 ${col.visible ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400'}`}>
+                                <span className={`text-sm flex-1 truncate ${col.visible ? 'text-gray-700 dark:text-gray-200' : 'text-gray-400'}`}>
                                     {col.label}
+                                    {col.isCustom && <span className="ml-1 text-[8px] opacity-50 px-1 rounded bg-primary/20">Custom</span>}
                                 </span>
                                 <div className="flex flex-col opacity-0 group-hover:opacity-100">
                                     <button onClick={() => moveColumn(idx, 'up')} disabled={idx === 0} className="text-gray-400 hover:text-primary disabled:opacity-30">
@@ -277,6 +325,13 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                                 {col.key === 'email' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.email || '-'}</span>}
                                                 {col.key === 'phone' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.phone || '-'}</span>}
                                                 {col.key === 'created_at' && <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(deal.created_at)}</span>}
+
+                                                {/* Dynamic Custom Field Rendering */}
+                                                {col.isCustom && (
+                                                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                                                        {(deal.custom_fields as any)?.[col.key] || '-'}
+                                                    </span>
+                                                )}
                                             </td>
                                         ))}
 

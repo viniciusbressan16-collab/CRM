@@ -18,6 +18,11 @@ type DealWithDetails = Deal & {
   pipeline: Pipeline | null;
 };
 
+interface AssociatedCompany {
+  name: string;
+  cnpj: string;
+}
+
 import Header from '../components/Header';
 
 interface ClientDetailsPageProps {
@@ -744,6 +749,28 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                       <span className="text-sm font-medium text-text-main-light dark:text-white">{deal.assignee.name}</span>
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Associated Companies Card */}
+            <div className="glass-card rounded-xl border border-white/5 p-6 shadow-xl relative group/card">
+              <div className="flex justify-between items-center mb-4">
+                <label className="text-[10px] font-bold text-primary/80 uppercase tracking-widest">Empresas Associadas</label>
+              </div>
+              <div className="space-y-3">
+                {deal.associated_companies && Array.isArray(deal.associated_companies) && (deal.associated_companies as unknown as AssociatedCompany[]).length > 0 ? (
+                  (deal.associated_companies as unknown as AssociatedCompany[]).map((company, idx) => (
+                    <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/10">
+                      <p className="text-sm font-bold text-white mb-1">{company.name}</p>
+                      <p className="text-[10px] text-white/40 font-mono flex items-center gap-1">
+                        <span className="material-symbols-outlined text-[10px]">corporate_fare</span>
+                        {company.cnpj || 'CNPJ não informado'}
+                      </p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-white/30 italic">Nenhuma empresa associada</p>
                 )}
               </div>
             </div>

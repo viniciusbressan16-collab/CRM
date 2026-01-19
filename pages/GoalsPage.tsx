@@ -8,6 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { hasPermission, PERMISSIONS } from '../utils/roles';
 
 import Header from '../components/Header';
+import { getCurrentPeriodKey, getPeriodLabel } from '../utils/goals';
 
 interface GoalsPageProps {
   onNavigate: (view: View, id?: string) => void;
@@ -22,6 +23,7 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
   const [editingProgressGoal, setEditingProgressGoal] = useState<any>(null);
   const [filter, setFilter] = useState('all');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<'active' | 'history'>('active');
 
   // Stats
   const [stats, setStats] = useState({
@@ -57,8 +59,42 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
     if (error) {
       console.error('Error fetching goals:', error);
     } else {
-      setGoals(data || []);
-      calculateStats(data || []);
+      // Automatic Reset/Archival Logic
+      const staleGoals = (data || []).filter(g => !g.is_archived && g.period_key !== getCurrentPeriodKey(g.period));
+
+      if (staleGoals.length > 0) {
+        // Archive them
+        await supabase.from('goals').update({ is_archived: true }).in('id', staleGoals.map(g => g.id));
+
+        // Re-create them for current period
+        for (const goal of staleGoals) {
+          const currentKey = getCurrentPeriodKey(goal.period);
+          await supabase.from('goals').insert({
+            user_id: goal.user_id,
+            type: goal.type,
+            target_value: goal.target_value,
+            current_value: 0,
+            period: goal.period,
+            period_key: currentKey,
+            is_archived: false
+          });
+        }
+
+        // Refetch to get updated state
+        const { data: updatedData } = await supabase
+          .from('goals')
+          .select(`
+            *,
+            assignee:profiles(id, name, avatar_url)
+          `)
+          .order('created_at', { ascending: false });
+
+        setGoals(updatedData || []);
+        calculateStats(updatedData || []);
+      } else {
+        setGoals(data || []);
+        calculateStats(data || []);
+      }
     }
     setLoading(false);
   };
@@ -233,15 +269,30 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                   <span className="text-sm font-medium text-gray-600">/ {stats.totalTarget}</span>
                 </div>
               </div>
-
             </section>
 
-            {/* Goals List (Now First) */}
+            {/* View Toggle Tabs */}
+            <div className="flex items-center gap-1 p-1 bg-gray-100 dark:bg-white/5 rounded-xl w-fit">
+              <button
+                onClick={() => setViewMode('active')}
+                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'active' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                Metas Ativas
+              </button>
+              <button
+                onClick={() => setViewMode('history')}
+                className={`px-6 py-2 rounded-lg text-sm font-bold transition-all ${viewMode === 'history' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'}`}
+              >
+                Histórico
+              </button>
+            </div>
+
+            {/* Goals List */}
             <section className="glass-panel rounded-2xl overflow-hidden">
               <div className="px-6 py-5 border-b border-glass-border flex justify-between items-center">
                 <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <span className="material-symbols-outlined text-primary">list_alt</span>
-                  <span className="text-slate-900 dark:text-white">Lista de Metas</span>
+                  <span className="material-symbols-outlined text-primary">{viewMode === 'active' ? 'list_alt' : 'history'}</span>
+                  <span className="text-slate-900 dark:text-white">{viewMode === 'active' ? 'Lista de Metas' : 'Histórico de Metas'}</span>
                 </h3>
               </div>
               <div className="overflow-x-auto">
@@ -267,6 +318,12 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                       </td></tr>
                     ) : (
                       goals.filter(g => {
+                        if (viewMode === 'active') {
+                          if (g.is_archived) return false;
+                        } else {
+                          if (!g.is_archived) return false;
+                        }
+
                         if (filter === 'mine') return g.user_id === currentUserId;
                         if (filter === 'general') return g.user_id === null;
                         return true;
@@ -318,6 +375,11 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
                               <p className="text-sm text-gray-400 capitalize">{goal.period}</p>
+                              {viewMode === 'history' && (
+                                <p className="text-[10px] text-primary font-bold uppercase tracking-tighter mt-0.5">
+                                  {getPeriodLabel(goal.period_key)}
+                                </p>
+                              )}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap min-w-[200px]">
                               <div className="flex flex-col gap-1.5">
@@ -335,13 +397,15 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap text-right">
                               <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button
-                                  onClick={() => setEditingProgressGoal(goal)}
-                                  className="p-2 text-gray-400 hover:text-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-all"
-                                  title="Atualizar Progresso"
-                                >
-                                  <span className="material-symbols-outlined text-lg">edit_square</span>
-                                </button>
+                                {viewMode === 'active' && (
+                                  <button
+                                    onClick={() => setEditingProgressGoal(goal)}
+                                    className="p-2 text-gray-400 hover:text-primary hover:bg-black/5 dark:hover:bg-white/5 rounded-lg transition-all"
+                                    title="Atualizar Progresso"
+                                  >
+                                    <span className="material-symbols-outlined text-lg">edit_square</span>
+                                  </button>
+                                )}
                                 {hasPermission(profile?.role, PERMISSIONS.EDIT_GOALS) && (
                                   <button
                                     onClick={() => handleDeleteGoal(goal.id)}

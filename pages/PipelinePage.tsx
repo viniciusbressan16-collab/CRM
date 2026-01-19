@@ -78,7 +78,7 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate }: {
         tagColor={getTagColor(deal.tag || '')}
         title={deal.client_name || deal.title}
         value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value || 0)}
-        avatar={(deal as any).assignee?.avatar_url || 'https://i.pravatar.cc/150'}
+        avatar={(deal as any).assignee?.avatar_url}
         time="Hoje"
         progress={deal.progress}
         status={deal.status === 'active' ? undefined : deal.status}
@@ -219,8 +219,9 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     })
   );
 
-  // Filter State
+  // Filter & Search State
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState<FilterState>({
     tags: [],
     assigneeId: null,
@@ -299,6 +300,27 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   // --- Filtering Logic ---
   const filteredDeals = useMemo(() => {
     return deals.filter(deal => {
+      // Search Term Filter
+      if (searchTerm.trim()) {
+        const searchLower = searchTerm.toLowerCase();
+        const matchesMain =
+          deal.client_name?.toLowerCase().includes(searchLower) ||
+          deal.contact_name?.toLowerCase().includes(searchLower) ||
+          deal.cnpj?.toLowerCase().includes(searchLower) ||
+          deal.email?.toLowerCase().includes(searchLower) ||
+          deal.title?.toLowerCase().includes(searchLower);
+
+        // Search in custom fields
+        let matchesCustom = false;
+        if (deal.custom_fields && typeof deal.custom_fields === 'object' && !Array.isArray(deal.custom_fields)) {
+          matchesCustom = Object.values(deal.custom_fields).some(val =>
+            String(val).toLowerCase().includes(searchLower)
+          );
+        }
+
+        if (!matchesMain && !matchesCustom) return false;
+      }
+
       // Status Filter (Default 'active')
       if (filters.status.length > 0 && !filters.status.includes(deal.status)) return false;
 
@@ -314,19 +336,30 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
       // Date Range Filter
       if (filters.startDate) {
-        const dealDate = new Date(deal.created_at).setHours(0, 0, 0, 0);
+        const dealDate = new Date(deal.created_at || '').setHours(0, 0, 0, 0);
         const filterStart = new Date(filters.startDate).setHours(0, 0, 0, 0);
         if (dealDate < filterStart) return false;
       }
       if (filters.endDate) {
-        const dealDate = new Date(deal.created_at).setHours(0, 0, 0, 0);
+        const dealDate = new Date(deal.created_at || '').setHours(0, 0, 0, 0);
         const filterEnd = new Date(filters.endDate).setHours(0, 0, 0, 0);
         if (dealDate > filterEnd) return false;
       }
 
       return true;
     });
-  }, [deals, filters]);
+  }, [deals, filters, searchTerm]);
+
+  // Extract all unique custom field keys globally
+  const globalCustomKeys = useMemo(() => {
+    const keys = new Set<string>();
+    deals.forEach(deal => {
+      if (deal.custom_fields && typeof deal.custom_fields === 'object' && !Array.isArray(deal.custom_fields)) {
+        Object.keys(deal.custom_fields).forEach(k => keys.add(k));
+      }
+    });
+    return Array.from(keys);
+  }, [deals]);
 
   const getColumnDeals = (pipelineId: string) => {
     return filteredDeals.filter(deal => deal.pipeline_id === pipelineId);
@@ -636,6 +669,26 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           onNavigate={onNavigate}
         >
           <div className="flex items-center gap-3">
+            {/* Search Input */}
+            <div className="relative w-64 hidden md:block">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+              <input
+                type="text"
+                placeholder="Buscar lead ou informação..."
+                className="w-full h-10 pl-10 pr-4 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-700 dark:text-white transition-all"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                >
+                  <span className="material-symbols-outlined text-[18px]">close</span>
+                </button>
+              )}
+            </div>
+
             {/* Filter Button */}
             <button
               className={`bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-main-light dark:text-text-main-dark hover:bg-gray-50 dark:hover:bg-white/5 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all ${activeFiltersCount > 0 ? 'ring-2 ring-primary/50' : ''}`}
@@ -800,7 +853,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                       tagColor={getTagColor(activeDeal.tag || '')}
                       title={activeDeal.client_name || activeDeal.title}
                       value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeDeal.value || 0)}
-                      avatar={(activeDeal as any).assignee?.avatar_url || 'https://i.pravatar.cc/150'}
+                      avatar={(activeDeal as any).assignee?.avatar_url}
                       time="Hoje"
                       progress={activeDeal.progress}
                       status={activeDeal.status === 'active' ? undefined : activeDeal.status}
@@ -821,6 +874,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           onClose={handleCloseModal}
           onSave={handleSaveDeal}
           initialData={selectedDeal}
+          knownCustomKeys={globalCustomKeys}
         />
 
         <FilterModal
