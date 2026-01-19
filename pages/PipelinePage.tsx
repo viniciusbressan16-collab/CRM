@@ -98,7 +98,7 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div ref={setNodeRef} className="flex-1 flex flex-col w-80 min-w-[320px] h-full relative group">
+    <div ref={setNodeRef} className="flex-1 flex flex-col w-80 min-w-[320px] h-[600px] lg:h-full relative group">
       <div className="flex items-center justify-between mb-4 px-1">
         <div className="flex items-center gap-3">
           <h3 className="font-bold text-gray-200 uppercase tracking-wider text-sm">{column.name}</h3>
@@ -662,7 +662,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
   return (
     <Layout onNavigate={onNavigate} activePage={activePage}>
-      <div className="flex flex-col h-full bg-transparent">
+      <div className="flex flex-col min-h-screen lg:h-full bg-transparent">
         <Header
           title="Pipeline de Vendas"
           description="Gerencie suas oportunidades e acompanhe o progresso."
@@ -796,7 +796,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
         </div>
 
         {/* Kanban Board Container with Snap Scroll */}
-        <div className="flex-1 overflow-x-auto overflow-y-hidden px-6 pb-6 snap-x snap-mandatory scroll-pl-6">
+        <div className="flex-1 overflow-x-auto overflow-y-auto lg:overflow-y-hidden px-4 md:px-6 pb-6 snap-x snap-mandatory scroll-pl-6">
           {loading ? (
             <div className="flex h-full items-center justify-center text-gray-500">Carregando pipeline...</div>
           ) : viewMode === 'list' ? (
@@ -818,7 +818,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
             >
               <div className="flex h-full gap-6 min-w-max">
                 {columns.map((column) => (
-                  <div key={column.id} className="snap-start flex-shrink-0 h-full">
+                  <div key={column.id} className="snap-start flex-shrink-0 h-full pb-4">
                     <PipelineColumn
                       column={column}
                       deals={getColumnDeals(column.id)}

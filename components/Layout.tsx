@@ -53,7 +53,7 @@ export default function Layout({ children, activePage, onNavigate }: LayoutProps
                     </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar p-4 lg:p-0">
+                <div className="flex-1 overflow-y-auto scroll-smooth custom-scrollbar p-2 lg:p-0">
                     {children}
                 </div>
             </main>

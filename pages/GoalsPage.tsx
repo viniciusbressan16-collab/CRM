@@ -207,7 +207,7 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
         </div>
       </Header>
 
-      <main className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <main className="flex-1 flex flex-col lg:h-full relative">
         <div className="flex-1 overflow-y-auto overflow-x-hidden p-6 lg:p-8 scroll-smooth custom-scrollbar">
           <div className="max-w-[1600px] mx-auto flex flex-col gap-8 pb-10">
 

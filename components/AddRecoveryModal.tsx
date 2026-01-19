@@ -8,9 +8,10 @@ interface AddRecoveryModalProps {
     isOpen: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    initialData?: any;
 }
 
-export default function AddRecoveryModal({ isOpen, onClose, onSuccess }: AddRecoveryModalProps) {
+export default function AddRecoveryModal({ isOpen, onClose, onSuccess, initialData }: AddRecoveryModalProps) {
     const [loading, setLoading] = useState(false);
 
     // Form State
@@ -21,6 +22,22 @@ export default function AddRecoveryModal({ isOpen, onClose, onSuccess }: AddReco
     const [partnerPercent, setPartnerPercent] = useState('50');
     const [myCompanyPercent, setMyCompanyPercent] = useState('40'); // Default 40% of remainder
     const [paymentDate, setPaymentDate] = useState('');
+
+    useEffect(() => {
+        if (initialData) {
+            setClientName(initialData.client_name || '');
+            setStatus(initialData.status || 'analysis');
+            setTotalRecovered(initialData.total_recovered?.toString() || '');
+            setFeePercent(initialData.fee_percent?.toString() || '30'); // Add fee_percent if it exists in DB, otherwise use default
+            setPartnerPercent(initialData.partner_percent?.toString() || '50');
+            setMyCompanyPercent(initialData.my_company_percent?.toString() || '40');
+            setPaymentDate(initialData.payment_date || '');
+
+            // If fee_percent is not in DB yet (not in current Insert type?), we might need to calculate it from feeAmount/total if stored
+        } else {
+            resetForm();
+        }
+    }, [initialData, isOpen]);
 
     // Calculations
     const total = parseFloat(totalRecovered) || 0;
@@ -49,7 +66,7 @@ export default function AddRecoveryModal({ isOpen, onClose, onSuccess }: AddReco
         e.preventDefault();
         setLoading(true);
         try {
-            const { error } = await supabase.from('financial_recoveries').insert({
+            const data = {
                 client_name: clientName,
                 status,
                 total_recovered: total,
@@ -59,9 +76,20 @@ export default function AddRecoveryModal({ isOpen, onClose, onSuccess }: AddReco
                 my_company_amount: myCompanyAmount,
                 other_office_amount: otherOfficeAmount,
                 payment_date: paymentDate || null,
-            });
+            };
 
-            if (error) throw error;
+            if (initialData?.id) {
+                const { error } = await supabase
+                    .from('financial_recoveries')
+                    .update(data)
+                    .eq('id', initialData.id);
+                if (error) throw error;
+            } else {
+                const { error } = await supabase
+                    .from('financial_recoveries')
+                    .insert(data);
+                if (error) throw error;
+            }
             onSuccess();
             onClose();
             resetForm();
@@ -92,7 +120,7 @@ export default function AddRecoveryModal({ isOpen, onClose, onSuccess }: AddReco
                     <div>
                         <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
                             <span className="material-symbols-outlined text-primary">attach_money</span>
-                            Nova Recuperação Tributária
+                            {initialData ? 'Editar Recuperação' : 'Nova Recuperação Tributária'}
                         </h2>
                         <p className="text-sm text-slate-500 dark:text-slate-400">Registre os valores e divisões de honorários</p>
                     </div>

@@ -53,6 +53,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
    const [selectedRetainerId, setSelectedRetainerId] = useState<string | null>(null);
    const [selectedClientName, setSelectedClientName] = useState('');
    const [editingRetainer, setEditingRetainer] = useState<any>(null);
+   const [editingRecovery, setEditingRecovery] = useState<any>(null);
 
    const fetchData = async () => {
       setLoading(true);
@@ -254,6 +255,21 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
       }
    };
 
+   const handleDeleteRecovery = async (recoveryId: string) => {
+      if (!confirm('Tem certeza que deseja excluir esta recuperação?')) return;
+      try {
+         const { error } = await supabase
+            .from('financial_recoveries')
+            .delete()
+            .eq('id', recoveryId);
+         if (error) throw error;
+         fetchData();
+      } catch (error) {
+         console.error('Error deleting recovery:', error);
+         alert('Erro ao excluir recuperação.');
+      }
+   };
+
    const openHistory = (retainer: any) => {
       setSelectedRetainerId(retainer.id);
       setSelectedClientName(retainer.client_name);
@@ -274,7 +290,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
          />
 
          {/* Scrollable Dashboard Content */}
-         <div className="flex-1 overflow-y-auto p-6 bg-transparent">
+         <div className="flex-1 lg:overflow-y-auto p-4 md:p-6 bg-transparent">
             <div className="mx-auto max-w-7xl">
                {/* Page Heading & Controls */}
                <div className="mb-8 flex flex-col justify-between gap-4 sm:flex-end sm:items-end sm:flex-row">
@@ -460,6 +476,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                                  <th className="px-6 py-3 font-semibold">Receita Realizada</th>
                                  <th className="px-6 py-3 font-semibold text-amber-600">Receita Pendente</th>
                                  <th className="px-6 py-3 font-semibold">Status</th>
+                                 <th className="px-6 py-3 font-semibold text-right">Ações</th>
                               </tr>
                            </thead>
                            <tbody className="divide-y divide-glass-border">
@@ -485,6 +502,27 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                                              }`}>
                                              {rec.status === 'restitution' ? 'Em Restituição' : 'Em Análise'}
                                           </span>
+                                       </td>
+                                       <td className="px-6 py-4 text-right">
+                                          <div className="flex justify-end gap-2">
+                                             <button
+                                                onClick={() => {
+                                                   setEditingRecovery(rec);
+                                                   setIsRecoveryModalOpen(true);
+                                                }}
+                                                className="p-1 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded transition-colors"
+                                                title="Editar"
+                                             >
+                                                <span className="material-symbols-outlined text-lg">edit</span>
+                                             </button>
+                                             <button
+                                                onClick={() => handleDeleteRecovery(rec.id)}
+                                                className="p-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded transition-colors"
+                                                title="Excluir"
+                                             >
+                                                <span className="material-symbols-outlined text-lg">delete</span>
+                                             </button>
+                                          </div>
                                        </td>
                                     </tr>
                                  ))
@@ -711,8 +749,12 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
          {/* Modals */}
          <AddRecoveryModal
             isOpen={isRecoveryModalOpen}
-            onClose={() => setIsRecoveryModalOpen(false)}
+            onClose={() => {
+               setIsRecoveryModalOpen(false);
+               setEditingRecovery(null);
+            }}
             onSuccess={fetchData}
+            initialData={editingRecovery}
          />
          <AddRetainerModal
             isOpen={isRetainerModalOpen}
