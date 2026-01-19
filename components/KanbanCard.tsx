@@ -36,19 +36,15 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
   };
 
   return (
-    <div onClick={onClick} className={`relative glass-card p-5 rounded-xl transition-all cursor-pointer group hover:-translate-y-1 hover:border-primary/40 dark:hover:border-primary/40 ${highlight ? 'border-l-4 border-l-amber-500' : ''}`}>
+    <div onClick={onClick} className={`relative glass-card p-5 rounded-xl transition-all cursor-pointer group hover:-translate-y-1 hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-[0_10px_30px_-10px_rgba(212,175,55,0.15)] ${highlight ? 'border-l-2 border-l-amber-500' : ''}`}>
       {/* Hover Gradient Overlay - Golden Tint */}
-      {/* Hover Gradient Overlay - Golden Tint with Spotlight effect */}
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-primary/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl pointer-events-none"></div>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,rgba(212,175,55,0.15),transparent_50%)] opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl pointer-events-none"></div>
 
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-3">
-          <span className={`bg-${tagColor}-100 dark:bg-zinc-800 text-${tagColor}-700 dark:text-${tagColor}-300 text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm ring-1 ring-inset ring-${tagColor}-500/20 dark:ring-white/10 backdrop-blur-md`}>
-            <span className="flex items-center gap-1.5">
-              <span className={`size-1.5 rounded-full bg-${tagColor}-500 animate-pulse`}></span>
-              {tag}
-            </span>
+          {/* Ghost Tag Style */}
+          <span className={`bg-transparent border border-${tagColor}-500/30 text-${tagColor}-600 dark:text-${tagColor}-400 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider`}>
+            {tag}
           </span>
           <div className="relative" ref={menuRef}>
             <button onClick={handleMenuClick} className="text-text-secondary-light dark:text-gray-500 hover:text-primary dark:hover:text-primary transition-colors p-1 rounded-lg hover:bg-primary/10 opacity-0 group-hover:opacity-100">
@@ -67,11 +63,11 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
           </div>
         </div>
 
-        <h4 className="font-semibold text-[15px] text-text-main-light dark:text-white mb-1.5 leading-snug tracking-tight group-hover:text-primary transition-colors">{title}</h4>
+        <h4 className="font-outfit font-semibold text-[15px] text-text-main-light dark:text-white mb-1.5 leading-snug tracking-tight group-hover:text-primary transition-colors">{title}</h4>
         <p className="text-sm font-medium text-text-secondary-light dark:text-gray-400 mb-4">{value}</p>
 
         {status && (
-          <div className="bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-[10px] font-bold px-2 py-0.5 rounded border border-red-100 dark:border-red-500/20 mb-3 inline-block">
+          <div className="bg-transparent border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 text-[9px] font-bold px-2 py-0.5 rounded mb-3 inline-block">
             {status}
           </div>
         )}
@@ -82,10 +78,9 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
               <span>Progresso</span>
               <span>{progress}%</span>
             </div>
-            <div className="w-full bg-gray-100 dark:bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5">
-              <div className="bg-primary h-1.5 rounded-full shadow-[0_0_10px_rgba(212,175,55,0.5)] relative overflow-hidden" style={{ width: `${progress}%` }}>
-                <div className="absolute inset-0 bg-white/40 animate-shimmer"></div>
-              </div>
+            {/* Sleek Progress Bar */}
+            <div className="w-full bg-gray-100 dark:bg-white/5 rounded-full h-1 overflow-hidden">
+              <div className="bg-primary h-1 rounded-full shadow-[0_0_12px_1px_rgba(212,175,55,0.6)] relative overflow-hidden" style={{ width: `${progress}%` }}></div>
             </div>
           </div>
         )}

@@ -29,6 +29,8 @@ import {
   SortableContext,
   sortableKeyboardCoordinates,
   verticalListSortingStrategy,
+  horizontalListSortingStrategy,
+  arrayMove,
   useSortable
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -72,7 +74,7 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate }: {
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-none mb-3">
+    <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-none">
       <KanbanCard
         tag={deal.tag || 'Novo'}
         tagColor={getTagColor(deal.tag || '')}
@@ -91,28 +93,65 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate }: {
 }
 
 function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns }: any) {
-  const { setNodeRef } = useDroppable({
+  // Sortable hook for the COLUMN itself
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({
     id: column.id,
+    data: {
+      type: 'COLUMN',
+      column
+    }
   });
+
+  // Droppable hook for the internal deal list (so we can drop deals into empty columns)
+  const { setNodeRef: setDroppableRef } = useDroppable({
+    id: column.id,
+    data: {
+      type: 'COLUMN_DROPPABLE',
+      column
+    }
+  });
+
+  const style = {
+    transform: CSS.Translate.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
 
   const [showMenu, setShowMenu] = useState(false);
 
   return (
-    <div ref={setNodeRef} className="flex-1 flex flex-col w-80 min-w-[320px] h-[600px] lg:h-full relative group">
-      <div className="flex items-center justify-between mb-4 px-1">
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="snap-start flex-shrink-0 pb-4 flex-1 flex flex-col w-80 min-w-[320px] h-[600px] lg:h-full relative group bg-gray-50/50 dark:bg-black/20 rounded-xl border border-transparent hover:border-gray-200 dark:hover:border-white/5 transition-colors"
+    >
+      {/* Column Header - Minimalist & Drag Handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-between mb-2 px-1 py-3 cursor-grab active:cursor-grabbing group/header"
+      >
         <div className="flex items-center gap-3">
-          <h3 className="font-bold text-gray-200 uppercase tracking-wider text-sm">{column.name}</h3>
-          <span className="bg-white/5 dark:bg-white/5 border border-primary/20 text-primary text-xs font-bold px-2.5 py-0.5 rounded-full backdrop-blur-md shadow-sm">{deals.length}</span>
+          <div className={`w-1.5 h-1.5 rounded-full bg-primary/40 group-hover/header:bg-primary transition-colors`}></div>
+          <h3 className="font-outfit font-bold text-gray-600 dark:text-gray-300 uppercase tracking-widest text-xs select-none group-hover/header:text-primary transition-colors">{column.name}</h3>
+          <span className="text-[10px] font-medium text-gray-400 bg-black/5 dark:bg-white/5 px-1.5 py-0.5 rounded">{deals.length}</span>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="h-1 w-16 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-            <div className={`h-full bg-primary w-full opacity-${(column.order_index + 1) * 20}`}></div>
-          </div>
+        <div className="flex items-center gap-2" onPointerDown={(e) => e.stopPropagation()}>
           {canManageColumns && (
             <div className="relative">
-              <button onClick={() => setShowMenu(!showMenu)} className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="material-symbols-outlined text-[16px] text-gray-500">more_vert</span>
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowMenu(!showMenu); }}
+                className="p-1 hover:bg-gray-200 dark:hover:bg-white/10 rounded text-gray-400 hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+              >
+                <span className="material-symbols-outlined text-[16px]">more_horiz</span>
               </button>
               {/* Menu content ... */}
               {showMenu && (
@@ -133,16 +172,11 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar pb-2 flex flex-col">
-        {/* Stats Card - "Jewelry Box" Style */}
-        <div className="glass-card mb-4 shrink-0 p-4 rounded-xl shadow-lg shadow-black/20 relative overflow-hidden group hover:border-primary/40 transition-all hover:-translate-y-1">
-          <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-30 transition-opacity">
-            <span className="material-symbols-outlined text-4xl text-primary">attach_money</span>
-          </div>
-          <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent"></div>
-
-          <p className="text-[11px] text-primary uppercase font-bold tracking-wider mb-1">Valor Total</p>
-          <p className="text-xl font-black text-white tracking-tight">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal(column.id))}</p>
+      <div ref={setDroppableRef} className="flex-1 overflow-y-auto px-2 custom-scrollbar pb-2 flex flex-col">
+        {/* Stats Card - Compact & Elegant */}
+        <div className="glass-panel mb-3 shrink-0 p-3 rounded-lg border border-primary/10 flex items-center justify-between">
+          <span className="text-[10px] uppercase tracking-widest text-gray-400 font-medium">Total</span>
+          <span className="text-sm font-bold text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal(column.id))}</span>
         </div>
 
         <SortableContext
@@ -150,7 +184,7 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
           strategy={verticalListSortingStrategy}
           id={column.id}
         >
-          <div className="min-h-[10px] pb-4">
+          <div className="min-h-[10px] pb-4 flex flex-col gap-3">
             {deals.map((deal: any) => (
               <SortableDealCard
                 key={deal.id}
@@ -161,16 +195,15 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
                 onNavigate={onNavigate}
               />
             ))}
+            <button
+              onClick={() => handleOpenModal(undefined, column.id)}
+              className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 mt-2 shrink-0 z-10 relative"
+            >
+              <span className="material-symbols-outlined text-[20px]">add</span>
+              <span className="font-bold text-sm">Nova Oportunidade</span>
+            </button>
           </div>
         </SortableContext>
-
-        <button
-          onClick={() => handleOpenModal(undefined, column.id)}
-          className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 mt-2"
-        >
-          <span className="material-symbols-outlined text-[20px]">add</span>
-          <span className="font-bold text-sm">Nova Oportunidade</span>
-        </button>
       </div>
     </div>
   );
@@ -206,7 +239,9 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
   // DnD State
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeType, setActiveType] = useState<'COLUMN' | 'DEAL' | null>(null);
   const activeDeal = useMemo(() => deals.find(d => d.id === activeId), [activeId, deals]);
+  const activeColumn = useMemo(() => columns.find(c => c.id === activeId), [activeId, columns]);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -509,6 +544,11 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   // DnD Handlers
   const handleDragStart = (event: DragStartEvent) => {
     setActiveId(event.active.id as string);
+    if (event.active.data.current?.type === 'COLUMN') {
+      setActiveType('COLUMN');
+    } else {
+      setActiveType('DEAL');
+    }
   };
 
   const handleDragOver = (event: DragOverEvent) => {
@@ -518,22 +558,36 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     const activeId = active.id;
     const overId = over.id;
 
+    if (activeId === overId) return;
+
+    // If dragging a column
+    if (activeType === 'COLUMN') return; // Handled in DragEnd
+
     // Find the deals
     const activeDeal = deals.find(d => d.id === activeId);
-    const overDeal = deals.find(d => d.id === overId);
+    if (!activeDeal) return; // Should not happen if type check works
 
-    if (!activeDeal) return;
+    // We only care if we are dragging a deal
+    if (activeType !== 'DEAL') return;
 
     const activeColumnId = activeDeal.pipeline_id;
 
     // Determine overColumnId
     let overColumnId: string | null = null;
 
+    // If over a column (the droppable/sortable container)
+    // Note: We changed keys in PipelineColumn. The container might use the column ID.
+    // Check if over.id is a column ID
     const isOverColumn = columns.some(c => c.id === overId);
+
     if (isOverColumn) {
       overColumnId = overId as string;
-    } else if (overDeal) {
-      overColumnId = overDeal.pipeline_id;
+    } else {
+      // If over another deal
+      const overDeal = deals.find(d => d.id === overId);
+      if (overDeal) {
+        overColumnId = overDeal.pipeline_id;
+      }
     }
 
     if (!overColumnId) return;
@@ -557,9 +611,51 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
     if (!activeId || !overId) {
       setActiveId(null);
+      setActiveType(null);
       return;
     }
 
+    // --- Handling Column Reorder ---
+    if (activeType === 'COLUMN') {
+      if (activeId !== overId) {
+        const oldIndex = columns.findIndex(c => c.id === activeId);
+        const newIndex = columns.findIndex(c => c.id === overId);
+
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newColumns = arrayMove(columns, oldIndex, newIndex);
+          setColumns(newColumns);
+
+          // Persist the new order
+          try {
+            // We need to update all columns related to the reorder range, or just all of them to be safe/easy.
+            // Updating all is safer for consistency.
+            const updates = newColumns.map((col, index) => ({
+              id: col.id,
+              name: col.name, // Required by type but not changing
+              order_index: index
+            }));
+
+            // In Supabase, can we do upsert? 
+            // Yes, upsert on 'id'.
+            const { error } = await supabase
+              .from('pipelines')
+              .upsert(updates, { onConflict: 'id' });
+
+            if (error) throw error;
+
+          } catch (err) {
+            console.error("Failed to save column order", err);
+            // Revert or show error (optional)
+            // fetchPipelineData(true); // Revert to server state
+          }
+        }
+      }
+      setActiveId(null);
+      setActiveType(null);
+      return;
+    }
+
+    // --- Handling Deal Reorder ---
     const currentDeal = deals.find(d => d.id === activeId);
 
     if (currentDeal) {
@@ -579,6 +675,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     }
 
     setActiveId(null);
+    setActiveType(null);
   };
 
   const dropAnimation: DropAnimation = {
@@ -817,9 +914,13 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
               onDragEnd={handleDragEnd}
             >
               <div className="flex h-full gap-6 min-w-max">
-                {columns.map((column) => (
-                  <div key={column.id} className="snap-start flex-shrink-0 h-full pb-4">
+                <SortableContext
+                  items={columns.map(c => c.id)}
+                  strategy={horizontalListSortingStrategy}
+                >
+                  {columns.map((column) => (
                     <PipelineColumn
+                      key={column.id}
                       column={column}
                       deals={getColumnDeals(column.id)}
                       calculateTotal={calculateColumnTotal}
@@ -831,8 +932,8 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                       onNavigate={onNavigate}
                       canManageColumns={canManageColumns}
                     />
-                  </div>
-                ))}
+                  ))}
+                </SortableContext>
 
                 {/* Add Column Button (Inline) - Snap aligned too */}
                 {canManageColumns && (
@@ -846,7 +947,14 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
               </div>
               <DragOverlay dropAnimation={dropAnimation}>
-                {activeDeal ? (
+                {activeType === 'COLUMN' && activeColumn ? (
+                  <div className="w-80 h-[600px] bg-gray-100 dark:bg-surface-dark rounded-xl border border-primary/50 opacity-90 shadow-2xl flex flex-col p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="font-bold text-gray-900 dark:text-white uppercase tracking-wider text-sm">{activeColumn.name}</h3>
+                    </div>
+                    <div className="text-sm text-gray-500">Movendo coluna...</div>
+                  </div>
+                ) : activeDeal ? (
                   <div className="w-80">
                     <KanbanCard
                       tag={activeDeal.tag || 'Novo'}

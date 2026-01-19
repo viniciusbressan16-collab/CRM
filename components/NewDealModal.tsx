@@ -220,18 +220,21 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white dark:bg-surface-dark w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="glass-panel w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] border border-white/20 dark:border-white/10">
                 {/* Header */}
-                <div className="flex items-center justify-between px-6 py-4 border-b border-border-light dark:border-border-dark">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 relative">
+                    {/* Header Glow */}
+                    <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent opacity-50"></div>
                     <div>
-                        <h2 className="text-xl font-bold text-slate-900 dark:text-white">
-                            {initialData ? 'Editar Lead' : 'Cadastro de Novo Lead'}
+                        <h2 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                            <span className="material-symbols-outlined text-primary">add_circle</span>
+                            {initialData ? 'Editar Lead' : 'Novo Lead'}
                         </h2>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Insira os dados da oportunidade</p>
+                        <p className="text-sm text-slate-500 dark:text-slate-300 font-medium">Insira os dados da oportunidade</p>
                     </div>
-                    <button onClick={onClose} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors">
-                        <span className="material-symbols-outlined text-2xl">close</span>
+                    <button onClick={onClose} className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-red-500">
+                        <span className="material-symbols-outlined text-xl">close</span>
                     </button>
                 </div>
 
@@ -502,7 +505,7 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
                 </form>
 
                 {/* Footer */}
-                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-border-light dark:border-border-dark bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-white/10 bg-white/30 dark:bg-black/20 backdrop-blur-md">
                     <button
                         onClick={onClose}
                         disabled={loading}
@@ -513,8 +516,9 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
                     <button
                         onClick={handleSubmit}
                         disabled={loading}
-                        className="px-6 py-2 text-sm font-bold text-white bg-primary hover:bg-primary-hover rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="btn-shine px-6 py-2 text-sm font-bold text-white bg-gradient-to-r from-primary to-amber-600 hover:to-primary rounded-lg shadow-lg shadow-primary/20 transition-all active:scale-95 disabled:opacity-70 disabled:cursor-not-allowed flex items-center gap-2"
                     >
+                        <span className="material-symbols-outlined text-[18px]">check</span>
                         {loading ? 'Salvando...' : 'Salvar Lead'}
                     </button>
                 </div>
