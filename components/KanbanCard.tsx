@@ -64,7 +64,29 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
         </div>
 
         <h4 className="font-outfit font-semibold text-[15px] text-text-main-light dark:text-white mb-1.5 leading-snug tracking-tight group-hover:text-primary transition-colors">{title}</h4>
-        <p className="text-sm font-medium text-text-secondary-light dark:text-gray-400 mb-4">{value}</p>
+
+        {/* Next Task Display with Completion Action */}
+        <div className="mb-4">
+          {(value && typeof value === 'object' && value.title) ? (
+            <div className="flex items-start gap-2 group/task">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (value.onComplete) value.onComplete(value.id);
+                }}
+                className="size-5 rounded-full border border-gray-300 dark:border-gray-600 flex items-center justify-center hover:bg-primary hover:border-primary transition-all text-transparent hover:text-white group-hover/task:border-primary/50"
+                title="Concluir tarefa"
+              >
+                <span className="material-symbols-outlined text-[14px]">check</span>
+              </button>
+              <p className="text-sm font-medium text-text-secondary-light dark:text-gray-400 flex-1 leading-snug break-words">
+                Próx: <span className="text-text-main-light dark:text-gray-200">{value.title}</span>
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm font-medium text-text-secondary-light dark:text-gray-400">{value}</p>
+          )}
+        </div>
 
         {status && (
           <div className="bg-transparent border border-red-200 dark:border-red-900/40 text-red-600 dark:text-red-400 text-[9px] font-bold px-2 py-0.5 rounded mb-3 inline-block">

@@ -301,23 +301,77 @@ button:active,
   width: 100%;
 }
 
-.input-luxury {
+/* Luxury Input Styles - Global Override */
+.input-luxury,
+input[type="text"],
+input[type="email"],
+input[type="password"],
+input[type="number"],
+input[type="date"],
+input[type="datetime-local"],
+select,
+textarea {
   width: 100%;
   background: var(--input-bg);
   border: 1px solid var(--input-border);
   border-radius: 0.75rem;
-  padding: 1rem 1rem 1rem 1rem;
+  padding: 0.75rem 1rem;
   font-size: 0.95rem;
   color: var(--input-text);
   transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
   outline: none;
 }
 
-.input-luxury:focus {
+.input-luxury:focus,
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
   border-color: #d4af37;
   background: var(--input-bg);
-  /* Maintain bg or slightly adjust */
   box-shadow: 0 0 0 1px rgba(212, 175, 55, 0.3), inset 0 0 20px rgba(212, 175, 55, 0.05);
+}
+
+/* --- PHASE 4: ANIMATIONS --- */
+
+/* Striped Progress Bar Animation */
+@keyframes progress-stripes {
+  from {
+    background-position: 1rem 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.animate-stripes {
+  background-image: linear-gradient(45deg,
+      rgba(255, 255, 255, 0.15) 25%,
+      transparent 25%,
+      transparent 50%,
+      rgba(255, 255, 255, 0.15) 50%,
+      rgba(255, 255, 255, 0.15) 75%,
+      transparent 75%,
+      transparent);
+  background-size: 1rem 1rem;
+  animation: progress-stripes 1s linear infinite;
+}
+
+/* Breathing Glow Effect */
+@keyframes breathing-glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 15px -5px rgba(212, 175, 55, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 25px 0px rgba(212, 175, 55, 0.6);
+  }
+}
+
+.animate-breathing-glow {
+  animation: breathing-glow 3s ease-in-out infinite;
 }
 
 /* Floating Label Logic */
@@ -346,10 +400,56 @@ button:active,
   text-transform: uppercase;
 }
 
-/* Custom Selection */
+/* Custom Selection - Apex Gold */
 ::selection {
-  background: rgba(212, 175, 55, 0.3);
-  color: white;
+  background: #d4af37;
+  color: #000000;
+  text-shadow: none;
+}
+
+/* Page Transitions */
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 20px, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+.animate-fade-in-up {
+  animation: fadeInUp 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}
+
+/* Glass Card Sheen Scan */
+.glass-card {
+  position: relative;
+  overflow: hidden;
+  /* Needed for sheen */
+}
+
+.glass-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -150%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(to right,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 50%,
+      transparent 100%);
+  transform: skewX(-25deg);
+  pointer-events: none;
+  transition: none;
+}
+
+.glass-card:hover::after {
+  left: 150%;
+  transition: 0.7s ease-in-out;
 }
 
 /* Luxury Button Styles */

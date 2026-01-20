@@ -16,12 +16,39 @@ interface CalendarPageProps {
 type CalendarView = 'month' | 'week';
 
 export default function CalendarPage({ onNavigate, activePage }: CalendarPageProps) {
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     const [currentDate, setCurrentDate] = useState(new Date());
     const [currentView, setCurrentView] = useState<CalendarView>('week');
+    // State with Persistence
+    const [taskViewMode, setTaskViewMode] = useState<'grid' | 'list'>(() =>
+        (localStorage.getItem('calendar_taskViewMode') as 'grid' | 'list') || 'grid'
+    );
+
+    // Filters with Persistence
+    const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'done'>(() =>
+        (localStorage.getItem('calendar_filterStatus') as any) || 'pending'
+    );
+    const [filterPriority, setFilterPriority] = useState<'all' | 'high' | 'medium' | 'low'>(() =>
+        (localStorage.getItem('calendar_filterPriority') as any) || 'all'
+    );
+    const [filterDate, setFilterDate] = useState<'all' | 'today' | 'overdue' | 'week'>(() =>
+        (localStorage.getItem('calendar_filterDate') as any) || 'all'
+    );
+    const [filterAssignee, setFilterAssignee] = useState<string>(() =>
+        localStorage.getItem('calendar_filterAssignee') || 'all'
+    );
+
     const [appointments, setAppointments] = useState<any[]>([]);
     const [tasks, setTasks] = useState<any[]>([]);
+    const [profiles, setProfiles] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Persistence Effects
+    useEffect(() => { localStorage.setItem('calendar_taskViewMode', taskViewMode); }, [taskViewMode]);
+    useEffect(() => { localStorage.setItem('calendar_filterStatus', filterStatus); }, [filterStatus]);
+    useEffect(() => { localStorage.setItem('calendar_filterPriority', filterPriority); }, [filterPriority]);
+    useEffect(() => { localStorage.setItem('calendar_filterDate', filterDate); }, [filterDate]);
+    useEffect(() => { localStorage.setItem('calendar_filterAssignee', filterAssignee); }, [filterAssignee]);
 
     // Appointment Modal State
     const [isApptModalOpen, setIsApptModalOpen] = useState(false);
@@ -39,7 +66,47 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
         if (user) {
             fetchData();
         }
-    }, [user, currentDate, currentView]);
+    }, [user, currentDate, currentView]); // Refresh on view change is fine, but we might want to decouple calendar data from validation of task data if it gets heavy
+
+    // Filter Tasks Logic
+    const getFilteredTasks = () => {
+        return tasks.filter(task => {
+            // Status Filter
+            if (filterStatus === 'pending' && task.status === 'done') return false;
+            if (filterStatus === 'done' && task.status !== 'done') return false;
+
+            // Priority Filter
+            if (filterPriority !== 'all' && task.priority !== filterPriority) return false;
+
+            // Date Filter
+            const taskDate = task.due_date ? new Date(task.due_date) : null;
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            if (filterDate === 'today') {
+                if (!taskDate) return false;
+                const d = new Date(taskDate);
+                d.setHours(0, 0, 0, 0);
+                return d.getTime() === today.getTime();
+            }
+            if (filterDate === 'overdue') {
+                if (!taskDate) return false;
+                return taskDate < today && task.status !== 'done';
+            }
+            if (filterDate === 'week') {
+                if (!taskDate) return false;
+                const nextWeek = new Date(today);
+                nextWeek.setDate(today.getDate() + 7);
+                return taskDate >= today && taskDate <= nextWeek;
+            }
+
+            if (filterAssignee !== 'all') {
+                if (!task.assignee_ids || !task.assignee_ids.includes(filterAssignee)) return false;
+            }
+
+            return true;
+        });
+    };
 
     const fetchData = async () => {
         setLoading(true);
@@ -62,6 +129,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
             }
 
             // Fetch Appointments
+            const { data: profilesData } = await supabase.from('profiles').select('*');
+            if (profilesData) setProfiles(profilesData);
+
             const { data: appts, error: apptError } = await supabase
                 .from('appointments')
                 .select('*')
@@ -73,19 +143,30 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
             setAppointments(appts || []);
 
             // Fetch Project Tasks
-            const { data: projectTasks, error: taskError } = await supabase
+            let projectTasksQuery = supabase
                 .from('project_tasks')
                 .select('*, project:internal_projects(title, category)')
-                .eq('assignee_id', user!.id)
                 .or(`status.eq.todo,status.eq.in_progress,status.eq.done`);
+
+            // Only filter by assignee if NOT a manager
+            if (profile?.role !== 'manager') {
+                projectTasksQuery = projectTasksQuery.contains('assignee_ids', [user!.id]);
+            }
+
+            const { data: projectTasks, error: taskError } = await projectTasksQuery;
 
             if (taskError) throw taskError;
 
             // Fetch Deal Tasks
-            const { data: dealTasks, error: dealTaskError } = await supabase
+            let dealTasksQuery = supabase
                 .from('deal_tasks')
-                .select('*, deal:deals(client_name)')
-                .eq('assignee_id', user!.id);
+                .select('*, deal:deals(client_name)');
+
+            if (profile?.role !== 'manager') {
+                dealTasksQuery = dealTasksQuery.contains('assignee_ids', [user!.id]);
+            }
+
+            const { data: dealTasks, error: dealTaskError } = await dealTasksQuery;
 
             if (dealTaskError) throw dealTaskError;
 
@@ -105,7 +186,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 status: t.is_completed ? 'done' : 'todo',
                 priority: t.is_urgent ? 'high' : 'medium',
                 project_id: null,
-                assignee_id: t.assignee_id,
+                assignee_ids: t.assignee_ids,
                 source: 'deal',
                 source_title: t.deal?.client_name,
                 category: 'Vendas'
@@ -170,7 +251,19 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
     };
 
     // Task Logic
-    const pendingTasks = tasks.filter(t => t.status !== 'done').slice(0, 8); // Limit to 8
+    const filteredTasksBase = getFilteredTasks();
+    const sortedTasks = [...filteredTasksBase].sort((a, b) => {
+        if (a.status === 'done' && b.status !== 'done') return 1;
+        if (a.status !== 'done' && b.status === 'done') return -1;
+        return new Date(a.due_date || '9999-12-31').getTime() - new Date(b.due_date || '9999-12-31').getTime();
+    });
+
+    // Pagination or limit could apply here, but for now we list all for list view, limit 8 for grid
+    const displayedTasks = taskViewMode === 'grid' ? sortedTasks.slice(0, 8) : sortedTasks;
+
+    // Stats based on ALL tasks (unfiltered) or filtered? Usually stats reflect total pending.
+    // Let's keep stats based on what's fetched (user's total tasks)
+    const pendingTasksCount = tasks.filter(t => t.status !== 'done').length;
     const completedCount = tasks.filter(t => t.status === 'done').length;
     const totalCount = tasks.length;
     const progressPercentage = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
@@ -432,7 +525,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
                                     <span className="material-symbols-outlined text-primary text-3xl">assignment</span>
-                                    <h2 className="text-2xl font-bold text-white">Minhas Tarefas do Dia</h2>
+                                    <h2 className="text-2xl font-bold text-white">Tarefas</h2>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <span className="text-sm font-medium text-gray-500">{completedCount} de {totalCount} concluídas</span>
@@ -442,54 +535,233 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                {pendingTasks.map(task => {
-                                    const isHigh = task.priority === 'high';
-                                    const tagColor = isHigh ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-primary/10 text-primary border-primary/20';
-
-                                    return (
-                                        <div key={task.id} className="glass-card p-5 border-l-4 border-l-primary flex flex-col justify-between hover:-translate-y-1">
-                                            <div>
-                                                <div className="flex justify-between items-start mb-3">
-                                                    <span className={`px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider ${tagColor}`}>
-                                                        {task.priority === 'high' ? 'Prioridade Alta' : task.project?.category || 'Geral'}
-                                                    </span>
-                                                    <div className={`size-6 rounded border cursor-pointer flex items-center justify-center transition-all ${task.status === 'done' ? 'bg-primary border-primary' : 'border-gray-600 hover:border-primary'}`} onClick={() => toggleTask(task)}>
-                                                        {task.status === 'done' && <span className="material-symbols-outlined text-black text-sm">check</span>}
-                                                    </div>
-                                                </div>
-                                                <h3 className="font-bold text-white text-lg mb-2 line-clamp-2">{task.title}</h3>
-                                                <p className="text-sm text-gray-400 mb-4 line-clamp-2">{task.description || `Tarefa do projeto: ${task.project?.title}`}</p>
-                                            </div>
-
-                                            <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                                <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-                                                    <span className="material-symbols-outlined text-[16px]">schedule</span>
-                                                    {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : 'Sem data'}
-                                                </div>
-                                                <button
-                                                    onClick={() => handleOpenTaskModal(task)}
-                                                    className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
-                                                    title="Editar tarefa"
-                                                >
-                                                    <span className="material-symbols-outlined text-[18px]">edit</span>
-                                                </button>
-                                            </div>
-                                        </div>
-                                    );
-                                })}
-
-                                {/* Add Task Button Card */}
-                                <button
-                                    onClick={() => handleOpenTaskModal()}
-                                    className="border-2 border-dashed border-gray-700/50 rounded-xl flex flex-col items-center justify-center p-8 hover:bg-white/5 hover:border-primary/30 transition-all gap-3 group min-h-[200px]"
-                                >
-                                    <div className="size-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                                        <span className="material-symbols-outlined text-gray-500 group-hover:text-primary text-2xl">add</span>
+                            {/* Toolbar: View Mode & Filters */}
+                            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 bg-glass-panel p-3 rounded-xl border border-glass-border">
+                                <div className="flex items-center gap-2">
+                                    <div className="bg-black/20 p-1 rounded-lg flex items-center border border-white/5">
+                                        <button
+                                            onClick={() => setTaskViewMode('grid')}
+                                            className={`p-1.5 rounded-md transition-all ${taskViewMode === 'grid' ? 'bg-primary text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                                            title="Visualização em Grade"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">grid_view</span>
+                                        </button>
+                                        <button
+                                            onClick={() => setTaskViewMode('list')}
+                                            className={`p-1.5 rounded-md transition-all ${taskViewMode === 'list' ? 'bg-primary text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                                            title="Visualização em Lista"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">view_list</span>
+                                        </button>
                                     </div>
-                                    <span className="font-bold text-gray-500 group-hover:text-primary transition-colors">Nova Tarefa</span>
-                                </button>
+
+                                    <div className="h-6 w-px bg-white/10 mx-2"></div>
+
+                                    <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+                                        {profile?.role === 'manager' && (
+                                            <select
+                                                value={filterAssignee}
+                                                onChange={(e) => setFilterAssignee(e.target.value)}
+                                                className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                            >
+                                                <option value="all">Todos os Responsáveis</option>
+                                                {profiles.map(p => (
+                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                        <select
+                                            value={filterStatus}
+                                            onChange={(e) => setFilterStatus(e.target.value as any)}
+                                            className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                        >
+                                            <option value="all">Todos os Status</option>
+                                            <option value="pending">Pendentes</option>
+                                            <option value="done">Concluídos</option>
+                                        </select>
+
+                                        <select
+                                            value={filterDate}
+                                            onChange={(e) => setFilterDate(e.target.value as any)}
+                                            className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                        >
+                                            <option value="all">Todas as Datas</option>
+                                            <option value="today">Hoje</option>
+                                            <option value="week">Esta Semana</option>
+                                            <option value="overdue">Atrasadas</option>
+                                        </select>
+
+                                        <select
+                                            value={filterPriority}
+                                            onChange={(e) => setFilterPriority(e.target.value as any)}
+                                            className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                        >
+                                            <option value="all">Todas as Prioridades</option>
+                                            <option value="high">Alta Prioridade</option>
+                                            <option value="medium">Média</option>
+                                            <option value="low">Baixa</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="text-xs text-gray-500 font-medium">
+                                    Exibindo {displayedTasks.length} tarefa(s)
+                                </div>
                             </div>
+
+                            {taskViewMode === 'grid' ? (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {displayedTasks.map(task => {
+                                        const isHigh = task.priority === 'high';
+                                        const tagColor = isHigh ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-primary/10 text-primary border-primary/20';
+
+                                        return (
+                                            <div key={task.id} className="glass-card p-5 border-l-4 border-l-primary flex flex-col justify-between hover:-translate-y-1">
+                                                <div>
+                                                    <div className="flex justify-between items-start mb-3">
+                                                        <span className={`px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider ${tagColor}`}>
+                                                            {task.priority === 'high' ? 'Prioridade Alta' : task.project?.category || 'Geral'}
+                                                        </span>
+                                                        <div className={`size-6 rounded border cursor-pointer flex items-center justify-center transition-all ${task.status === 'done' ? 'bg-primary border-primary' : 'border-gray-600 hover:border-primary'}`} onClick={() => toggleTask(task)}>
+                                                            {task.status === 'done' && <span className="material-symbols-outlined text-black text-sm">check</span>}
+                                                        </div>
+                                                    </div>
+                                                    <h3 className="font-bold text-white text-lg mb-2 line-clamp-2">{task.title}</h3>
+                                                    <p className="text-sm text-gray-400 mb-4 line-clamp-2">{task.description || `Tarefa do projeto: ${task.project?.title}`}</p>
+                                                </div>
+
+                                                <div className="flex items-center justify-between pt-4 border-t border-white/5">
+                                                    <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
+                                                        <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                                        {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : 'Sem data'}
+                                                    </div>
+                                                    <button
+                                                        onClick={() => handleOpenTaskModal(task)}
+                                                        className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
+                                                        title="Editar tarefa"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                    </button>
+                                                </div>
+                                                <div className="flex -space-x-2 px-1 pb-1 mt-2">
+                                                    {task.assignee_ids && task.assignee_ids.map((uid: string) => {
+                                                        const user = profiles.find(p => p.id === uid);
+                                                        if (!user) return null;
+                                                        return (
+                                                            <div key={uid} className="size-6 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[8px] overflow-hidden hover:scale-110 transition-transform z-0 hover:z-10" title={user.name}>
+                                                                {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* Add Task Button Card - Only in Grid View */}
+                                    <button
+                                        onClick={() => handleOpenTaskModal()}
+                                        className="border-2 border-dashed border-gray-700/50 rounded-xl flex flex-col items-center justify-center p-8 hover:bg-white/5 hover:border-primary/30 transition-all gap-3 group min-h-[200px]"
+                                    >
+                                        <div className="size-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
+                                            <span className="material-symbols-outlined text-gray-500 group-hover:text-primary text-2xl">add</span>
+                                        </div>
+                                        <span className="font-bold text-gray-500 group-hover:text-primary transition-colors">Nova Tarefa</span>
+                                    </button>
+                                </div>
+                            ) : (
+                                <div className="glass-panel rounded-xl overflow-hidden">
+                                    <table className="w-full text-left border-collapse">
+                                        <thead>
+                                            <tr className="border-b border-glass-border bg-white/5">
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Tarefa</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Origem</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Origem</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Responsáveis</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Prioridade</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Data</th>
+                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Ações</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-glass-border">
+                                            {displayedTasks.length > 0 ? displayedTasks.map(task => (
+                                                <tr key={task.id} className="hover:bg-white/5 transition-colors group">
+                                                    <td className="p-4 w-12 text-center">
+                                                        <div
+                                                            onClick={() => toggleTask(task)}
+                                                            className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-all mx-auto ${task.status === 'done' ? 'bg-primary border-primary' : 'border-gray-600 hover:border-primary'}`}
+                                                        >
+                                                            {task.status === 'done' && <span className="material-symbols-outlined text-black text-xs">check</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className={`font-medium transition-all ${task.status === 'done' ? 'text-gray-500 line-through' : 'text-white'}`}>
+                                                            {task.title}
+                                                        </div>
+                                                        {task.description && <div className="text-xs text-gray-500 truncate max-w-[300px]">{task.description}</div>}
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <span className="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded border border-white/10">
+                                                            {task.project?.category || 'Vendas'}
+                                                        </span>
+                                                        <div className="text-[10px] text-gray-500 mt-1 truncate max-w-[150px]">
+                                                            {task.source === 'deal' ? task.source_title : task.project?.title}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className="flex -space-x-1">
+                                                            {task.assignee_ids && task.assignee_ids.map((uid: string) => {
+                                                                const user = profiles.find(p => p.id === uid);
+                                                                if (!user) return null;
+                                                                return (
+                                                                    <div key={uid} className="size-6 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[8px] overflow-hidden" title={user.name}>
+                                                                        {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {(!task.assignee_ids || task.assignee_ids.length === 0) && <span className="text-gray-600 text-[10px]">-</span>}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${task.priority === 'high'
+                                                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
+                                                            : task.priority === 'low'
+                                                                ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                                                                : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
+                                                            }`}>
+                                                            {task.priority === 'high' ? 'Alta' : task.priority === 'low' ? 'Baixa' : 'Média'}
+                                                        </span>
+                                                    </td>
+                                                    <td className="p-4">
+                                                        <div className={`text-xs font-medium flex items-center gap-1 ${task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done'
+                                                            ? 'text-red-400'
+                                                            : 'text-gray-400'
+                                                            }`}>
+                                                            <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                                                            {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : '-'}
+                                                        </div>
+                                                    </td>
+                                                    <td className="p-4 text-right">
+                                                        <button
+                                                            onClick={() => handleOpenTaskModal(task)}
+                                                            className="p-1.5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                                                            title="Editar"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            )) : (
+                                                <tr>
+                                                    <td colSpan={6} className="p-8 text-center text-gray-500">
+                                                        Nenhuma tarefa encontrada com os filtros atuais.
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </div>
 
                     </div>

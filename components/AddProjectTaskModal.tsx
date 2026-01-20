@@ -16,7 +16,7 @@ export default function AddProjectTaskModal({ isOpen, onClose, onSuccess, projec
 
     const [formData, setFormData] = useState({
         title: '',
-        assignee_id: '',
+        assignee_ids: [] as string[],
         project_id: '',
         due_date: '',
         priority: 'medium'
@@ -31,7 +31,7 @@ export default function AddProjectTaskModal({ isOpen, onClose, onSuccess, projec
                 if (taskToEdit) {
                     setFormData({
                         title: taskToEdit.title,
-                        assignee_id: taskToEdit.assignee_id || '',
+                        assignee_ids: taskToEdit.assignee_ids || (taskToEdit.assignee_id ? [taskToEdit.assignee_id] : []),
                         project_id: taskToEdit.project_id || projectId,
                         due_date: taskToEdit.due_date ? new Date(taskToEdit.due_date).toISOString().split('T')[0] : '',
                         priority: taskToEdit.priority || 'medium'
@@ -40,7 +40,7 @@ export default function AddProjectTaskModal({ isOpen, onClose, onSuccess, projec
                     const { data: { user } } = await supabase.auth.getUser();
                     setFormData({
                         title: '',
-                        assignee_id: user?.id || '',
+                        assignee_ids: user ? [user.id] : [],
                         project_id: projectId || '',
                         due_date: '',
                         priority: 'medium'
@@ -72,7 +72,8 @@ export default function AddProjectTaskModal({ isOpen, onClose, onSuccess, projec
             const payload: any = {
                 project_id: targetProjectId,
                 title: formData.title,
-                assignee_id: formData.assignee_id || null, // Convert empty string to null
+                assignee_ids: formData.assignee_ids,
+                assignee_id: formData.assignee_ids[0] || null, // Keep sync for now
                 due_date: formData.due_date || null,
                 priority: formData.priority,
             };
@@ -194,17 +195,39 @@ export default function AddProjectTaskModal({ isOpen, onClose, onSuccess, projec
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Responsável</label>
-                        <select
-                            className="w-full rounded-xl border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700/50 p-2.5 text-sm focus:border-primary focus:ring-primary dark:text-white"
-                            value={formData.assignee_id}
-                            onChange={e => setFormData({ ...formData, assignee_id: e.target.value })}
-                        >
-                            <option value="">Sem responsável</option>
-                            {users.map(user => (
-                                <option key={user.id} value={user.id}>{user.name}</option>
-                            ))}
-                        </select>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Responsáveis</label>
+                        <div className="grid grid-cols-2 gap-2 max-h-[150px] overflow-y-auto custom-scrollbar p-1">
+                            {users.map(user => {
+                                const isSelected = formData.assignee_ids.includes(user.id);
+                                return (
+                                    <div
+                                        key={user.id}
+                                        onClick={() => {
+                                            const newIds = isSelected
+                                                ? formData.assignee_ids.filter(id => id !== user.id)
+                                                : [...formData.assignee_ids, user.id];
+                                            setFormData({ ...formData, assignee_ids: newIds });
+                                        }}
+                                        className={`flex items-center gap-2 p-2 rounded-lg border cursor-pointer transition-all ${isSelected
+                                                ? 'bg-primary/10 border-primary shadow-[0_0_10px_rgba(212,175,55,0.2)]'
+                                                : 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600 hover:border-primary/50'
+                                            }`}
+                                    >
+                                        <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold ${isSelected ? 'bg-primary text-black' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
+                                            {user.avatar_url ? (
+                                                <img src={user.avatar_url} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                                            ) : (
+                                                user.name?.charAt(0).toUpperCase()
+                                            )}
+                                        </div>
+                                        <span className={`text-xs font-medium truncate ${isSelected ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>
+                                            {user.name || 'Sem nome'}
+                                        </span>
+                                        {isSelected && <span className="material-symbols-outlined text-primary text-sm ml-auto">check_circle</span>}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     </div>
                 </form>
 

@@ -57,7 +57,7 @@ interface PipelineStats {
 
 // --- Helper Components ---
 
-function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void }) {
+function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void }) {
   const {
     attributes,
     listeners,
@@ -79,7 +79,7 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate }: {
         tag={deal.tag || 'Novo'}
         tagColor={getTagColor(deal.tag || '')}
         title={deal.client_name || deal.title}
-        value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value || 0)}
+        value={(deal as any).nextTask || new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value || 0)}
         avatar={(deal as any).assignee?.avatar_url}
         time="Hoje"
         progress={deal.progress}
@@ -92,7 +92,7 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate }: {
   );
 }
 
-function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns }: any) {
+function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask }: any) {
   // Sortable hook for the COLUMN itself
   const {
     attributes,
@@ -193,6 +193,7 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
                 onEdit={() => handleOpenModal(deal)}
                 onDelete={() => handleDeleteDeal(deal.id)}
                 onNavigate={onNavigate}
+                onCompleteTask={onCompleteTask}
               />
             ))}
             <button
@@ -305,13 +306,50 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       const columnsList = pipelinesData || [];
       const totalColumns = columnsList.length;
 
-      // Calculate progress for ALL deals
+      // Fetch tasks separately to ensure stability
+      let dealTasks: any[] = [];
+      const dealIds = allDeals.map(d => d.id);
+
+      if (dealIds.length > 0) {
+        const { data: tasksData, error: tasksError } = await supabase
+          .from('deal_tasks')
+          .select('id, deal_id, title, is_completed, due_date')
+          .in('deal_id', dealIds)
+          .eq('is_completed', false);
+
+        if (!tasksError) {
+          dealTasks = tasksData || [];
+        } else {
+          console.error('Error fetching deal tasks:', tasksError);
+        }
+      }
+
+      // Calculate progress and attach next task
       const dealsWithProgress = allDeals.map(deal => {
         const columnIndex = columnsList.findIndex(c => c.id === deal.pipeline_id);
         const progress = totalColumns > 0 && columnIndex >= 0
           ? Math.round(((columnIndex + 1) / totalColumns) * 100)
           : 0;
-        return { ...deal, progress };
+
+        // Find next task from separate fetched list
+        const tasks = dealTasks.filter(t => t.deal_id === deal.id);
+
+        // Sort by due date (ascending)
+        tasks.sort((a: any, b: any) => {
+          if (!a.due_date) return 1;
+          if (!b.due_date) return -1;
+          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+        });
+
+        const nextTask = tasks.length > 0
+          ? {
+            id: tasks[0].id,
+            title: tasks[0].title,
+            onComplete: (taskId: string) => handleCompleteTask(taskId)
+          }
+          : 'Sem tarefas pendentes';
+
+        return { ...deal, progress, nextTask };
       });
 
       setColumns(columnsList);
@@ -756,6 +794,24 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     }
   };
 
+  const handleCompleteTask = async (taskId: string) => {
+    try {
+      const { error } = await supabase
+        .from('deal_tasks')
+        .update({ is_completed: true })
+        .eq('id', taskId);
+
+      if (error) throw error;
+
+      // Optimistic update or refetch
+      // For simplicity and correctness, we refetch to update the "Next Task" logic
+      fetchPipelineData(true);
+    } catch (error) {
+      console.error('Error completing task:', error);
+      alert('Erro ao concluir tarefa.');
+    }
+  };
+
 
   return (
     <Layout onNavigate={onNavigate} activePage={activePage}>
@@ -931,6 +987,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                       onDeleteColumn={handleDeleteColumn}
                       onNavigate={onNavigate}
                       canManageColumns={canManageColumns}
+                      onCompleteTask={handleCompleteTask}
                     />
                   ))}
                 </SortableContext>

@@ -289,7 +289,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskUrgent, setNewTaskUrgent] = useState(false);
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [newTaskAssignee, setNewTaskAssignee] = useState('');
+  const [newTaskAssigneeIds, setNewTaskAssigneeIds] = useState<string[]>([]);
 
   // Edit Modal State
   const [editingSection, setEditingSection] = useState<'client' | 'contact' | 'assignee' | 'tags' | null>(null);
@@ -448,12 +448,13 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
         title: newTaskTitle,
         is_urgent: newTaskUrgent,
         due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
-        assignee_id: newTaskAssignee || null
+        assignee_ids: newTaskAssigneeIds,
+        assignee_id: newTaskAssigneeIds[0] || null
       });
       if (error) throw error;
       setNewTaskTitle('');
       setNewTaskUrgent(false);
-      setNewTaskAssignee('');
+      setNewTaskAssigneeIds([]);
       setIsAddingTask(false);
       fetchTasks();
       fetchHistory();
@@ -942,16 +943,34 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                           onChange={(e) => setNewTaskDueDate(e.target.value)}
                           className="flex-1 text-xs p-2.5 rounded-lg border border-white/10 bg-black/20 text-white focus:border-primary/50 outline-none"
                         />
-                        <select
-                          value={newTaskAssignee}
-                          onChange={(e) => setNewTaskAssignee(e.target.value)}
-                          className="flex-1 text-xs p-2.5 rounded-lg border border-white/10 bg-black/20 text-white focus:border-primary/50 outline-none appearance-none"
-                        >
-                          <option value="" className="bg-gray-900">Sem Responsável</option>
-                          {profiles.map(p => (
-                            <option key={p.id} value={p.id} className="bg-gray-900">{p.name}</option>
-                          ))}
-                        </select>
+                        <div className="flex-1 overflow-x-auto">
+                          <div className="flex gap-2 pb-1">
+                            {profiles.map(p => {
+                              const isSelected = newTaskAssigneeIds.includes(p.id);
+                              return (
+                                <div
+                                  key={p.id}
+                                  onClick={() => {
+                                    const newIds = isSelected
+                                      ? newTaskAssigneeIds.filter(id => id !== p.id)
+                                      : [...newTaskAssigneeIds, p.id];
+                                    setNewTaskAssigneeIds(newIds);
+                                  }}
+                                  title={p.name || ''}
+                                  className={`size-8 rounded-full flex items-center justify-center cursor-pointer transition-all border-2 ${isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-transparent opacity-50 hover:opacity-100 hover:border-white/20'}`}
+                                >
+                                  {p.avatar_url ? (
+                                    <img src={p.avatar_url} className="w-full h-full rounded-full object-cover" alt={p.name || ''} />
+                                  ) : (
+                                    <div className="w-full h-full rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white font-bold">
+                                      {p.name?.charAt(0).toUpperCase()}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between">
                         <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer hover:text-white transition-colors">
@@ -988,6 +1007,17 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                               {formatDateShort(task.due_date)}
                             </span>
                             {task.is_completed && <span className="text-[10px] text-green-400 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">done_all</span> Concluído</span>}
+                          </div>
+                          <div className="flex -space-x-1 mt-2">
+                            {task.assignee_ids && task.assignee_ids.map((uid: string) => {
+                              const user = profiles.find(p => p.id === uid);
+                              if (!user) return null;
+                              return (
+                                <div key={uid} className="size-5 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[8px] overflow-hidden" title={user.name || ''}>
+                                  {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
                         <div className="opacity-0 group-hover/item:opacity-100 transition-opacity absolute top-4 right-4" onClick={(e) => e.preventDefault()}>

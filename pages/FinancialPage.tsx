@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { View } from '../App';
 import Layout from '../components/Layout';
 import { supabase } from '../lib/supabaseClient';
@@ -384,41 +385,77 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                            <p className="text-sm text-gray-500 dark:text-gray-400">Receitas Realizadas vs Despesas</p>
                         </div>
                      </div>
-                     {/* Visual Chart Bars */}
-                     <div className="relative h-64 w-full flex items-end justify-between px-2 pb-6 gap-2">
-                        {chartData.length > 0 ? chartData.map((data, idx) => {
-                           // Normalize heights for visualization (max bar 100%)
-                           const maxVal = Math.max(...chartData.map(d => Math.max(d.revenue, d.expense))) || 1;
-                           const revHeight = (data.revenue / maxVal) * 90; // max 90%
-                           const expHeight = (data.expense / maxVal) * 90; // max 90%
+                     {/* Visual Chart Bars - Recharts Implementation */}
+                     <div className="h-64 w-full">
+                        {/* Gradients */}
+                        <svg style={{ height: 0, width: 0, position: 'absolute' }}>
+                           <defs>
+                              <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                                 <stop offset="5%" stopColor="#d4af37" stopOpacity={0.8} />
+                                 <stop offset="95%" stopColor="#d4af37" stopOpacity={0} />
+                              </linearGradient>
+                              <linearGradient id="colorExpense" x1="0" y1="0" x2="0" y2="1">
+                                 <stop offset="5%" stopColor="#fb7185" stopOpacity={0.8} />
+                                 <stop offset="95%" stopColor="#fb7185" stopOpacity={0} />
+                              </linearGradient>
+                           </defs>
+                        </svg>
 
-                           return (
-                              <div key={data.month} className="flex h-full w-full flex-col justify-end gap-1 group relative">
-                                 {/* Tooltip on hover */}
-                                 <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block bg-slate-800 text-white text-xs rounded p-2 z-10 whitespace-nowrap shadow-lg">
-                                    <div>Rec: {data.revenue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                                    <div>Desp: {data.expense.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</div>
-                                 </div>
-
-                                 <div className="relative flex h-full items-end justify-center gap-1 md:gap-2 w-full px-1">
-                                    <div
-                                       className="w-full max-w-[20px] md:max-w-[30px] rounded-t bg-primary transition-all hover:bg-primary/90"
-                                       style={{ height: `${Math.max(revHeight, 2)}%` }} // min height 2%
-                                    ></div>
-                                    <div
-                                       className="w-full max-w-[20px] md:max-w-[30px] rounded-t bg-rose-400 dark:bg-rose-500/80 transition-all hover:bg-rose-500"
-                                       style={{ height: `${Math.max(expHeight, 2)}%` }} // min height 2%
-                                    ></div>
-                                 </div>
-                                 <span className="text-center text-xs text-gray-400 mt-2">{data.month}</span>
-                              </div>
-                           );
-                        }) : (
-                           <div className="w-full h-full flex items-center justify-center text-gray-400">Carregando gráfico...</div>
-                        )}
-                        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between pb-8 pt-2">
-                           {[1, 2, 3, 4].map(line => <div key={line} className="h-px w-full border-t border-dashed border-glass-border"></div>)}
-                           <div className="h-px w-full border-b border-glass-border"></div>
+                        <div className="h-full w-full">
+                           <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={chartData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.1)" />
+                                 <XAxis
+                                    dataKey="month"
+                                    axisLine={false}
+                                    tickLine={false}
+                                    tick={{ fill: '#9ca3af', fontSize: 12 }}
+                                 />
+                                 <Tooltip
+                                    cursor={{ stroke: 'rgba(255,255,255,0.2)', strokeWidth: 1 }}
+                                    content={({ active, payload, label }) => {
+                                       if (active && payload && payload.length) {
+                                          return (
+                                             <div className="glass-panel p-3 rounded-lg shadow-xl border border-glass-border">
+                                                <p className="text-sm font-bold text-gray-900 dark:text-white mb-2">{label}</p>
+                                                <div className="flex items-center gap-2 mb-1">
+                                                   <div className="w-2 h-2 rounded-full bg-primary"></div>
+                                                   <span className="text-xs text-gray-500">Rec:</span>
+                                                   <span className="text-xs font-bold text-primary">
+                                                      {Number(payload[0].value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                   </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                   <div className="w-2 h-2 rounded-full bg-rose-400"></div>
+                                                   <span className="text-xs text-gray-500">Desp:</span>
+                                                   <span className="text-xs font-bold text-rose-400">
+                                                      {Number(payload[1].value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                                   </span>
+                                                </div>
+                                             </div>
+                                          );
+                                       }
+                                       return null;
+                                    }}
+                                 />
+                                 <Area
+                                    type="monotone"
+                                    dataKey="revenue"
+                                    stroke="#d4af37"
+                                    fillOpacity={1}
+                                    fill="url(#colorRevenue)"
+                                    strokeWidth={2}
+                                 />
+                                 <Area
+                                    type="monotone"
+                                    dataKey="expense"
+                                    stroke="#fb7185"
+                                    fillOpacity={1}
+                                    fill="url(#colorExpense)"
+                                    strokeWidth={2}
+                                 />
+                              </AreaChart>
+                           </ResponsiveContainer>
                         </div>
                      </div>
                   </div>
@@ -435,8 +472,12 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                                     {metrics.totalRecoveredVolume.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                  </div>
                               </div>
+                              {/* Recharts Pie Chart Mini or just simple bar? Keeping simple bar but animated */}
                               <div className="flex h-2 overflow-hidden rounded bg-gray-100 text-xs dark:bg-gray-800">
-                                 <div className="flex flex-col justify-center bg-blue-500 text-center text-white shadow-none whitespace-nowrap" style={{ width: '100%' }}></div>
+                                 <div
+                                    className="animate-stripes flex flex-col justify-center bg-blue-500 text-center text-white shadow-none whitespace-nowrap transition-all duration-500"
+                                    style={{ width: '100%' }}
+                                 ></div>
                               </div>
                            </div>
                         </div>

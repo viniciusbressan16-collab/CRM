@@ -253,7 +253,9 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                   <h2 className="text-3xl font-medium text-slate-900 dark:text-white">{stats.averageProgress}%</h2>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 mt-3 overflow-hidden">
-                  <div className="bg-gradient-to-r from-amber-600 to-primary h-1.5 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(250,232,176,0.3)]" style={{ width: `${stats.averageProgress}%` }}></div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-1.5 mt-3 overflow-hidden">
+                    <div className="animate-stripes bg-gradient-to-r from-amber-600 to-primary h-1.5 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(250,232,176,0.3)]" style={{ width: `${stats.averageProgress}%` }}></div>
+                  </div>
                 </div>
               </div>
 
@@ -433,7 +435,7 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Top Performer Card */}
                 {stats.topPerformer ? (
-                  <div className="bg-gradient-to-br from-gray-900 to-black border border-glass-border rounded-2xl p-6 text-white shadow-lg shadow-black/40 relative overflow-hidden flex flex-col justify-center min-h-[250px] group">
+                  <div className="animate-breathing-glow bg-gradient-to-br from-gray-900 to-black border border-glass-border rounded-2xl p-6 text-white shadow-lg shadow-black/40 relative overflow-hidden flex flex-col justify-center min-h-[250px] group">
                     <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent bg-fixed pointer-events-none"></div>
                     <div className="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity duration-500">
                       <span className="material-symbols-outlined text-9xl text-primary">emoji_events</span>
@@ -459,7 +461,7 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                           <span className="text-primary">{stats.topPerformer.average}%</span>
                         </div>
                         <div className="w-full bg-gray-800 rounded-full h-2 overflow-hidden border border-white/5">
-                          <div className="bg-gradient-to-r from-primary to-amber-500 h-2 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(250,232,176,0.4)]" style={{ width: `${Math.min(100, stats.topPerformer.average)}%` }}></div>
+                          <div className="animate-stripes bg-gradient-to-r from-primary to-amber-500 h-2 rounded-full transition-all duration-1000 shadow-[0_0_10px_rgba(250,232,176,0.4)]" style={{ width: `${Math.min(100, stats.topPerformer.average)}%` }}></div>
                         </div>
                       </div>
                     </div>
@@ -502,8 +504,8 @@ export default function GoalsPage({ onNavigate, activePage }: GoalsPageProps) {
                           return (
                             <tr key={user.id} className="hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
                               <td className="px-4 py-3 text-center">
-                                <div className={`size-6 mx-auto rounded-full flex items-center justify-center text-xs font-bold ${index === 0 ? 'bg-amber-500 text-black shadow-[0_0_10px_rgba(245,158,11,0.4)]' : index === 1 ? 'bg-gray-300 dark:bg-gray-400 text-black' : index === 2 ? 'bg-orange-700 text-white' : 'text-gray-600 bg-black/5 dark:bg-white/5'}`}>
-                                  {index + 1}
+                                <div className={`size-8 mx-auto rounded-full flex items-center justify-center text-sm font-bold ${index === 0 ? 'bg-gradient-to-br from-amber-300 to-amber-600 text-white shadow-lg shadow-amber-500/40 ring-2 ring-amber-400/50' : index === 1 ? 'bg-gradient-to-br from-slate-300 to-slate-500 text-white shadow-lg ring-2 ring-slate-400/50' : index === 2 ? 'bg-gradient-to-br from-orange-400 to-orange-700 text-white shadow-lg ring-2 ring-orange-500/50' : 'text-gray-600 bg-black/5 dark:bg-white/5'}`}>
+                                  {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : (index + 1)}
                                 </div>
                               </td>
                               <td className="px-4 py-3">

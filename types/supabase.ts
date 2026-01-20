@@ -157,6 +157,7 @@ export type Database = {
             deal_tasks: {
                 Row: {
                     assignee_id: string | null
+                    assignee_ids: string[] | null
                     created_at: string | null
                     deal_id: string
                     due_date: string | null
@@ -167,6 +168,7 @@ export type Database = {
                 }
                 Insert: {
                     assignee_id?: string | null
+                    assignee_ids?: string[] | null
                     created_at?: string | null
                     deal_id: string
                     due_date?: string | null
@@ -177,6 +179,7 @@ export type Database = {
                 }
                 Update: {
                     assignee_id?: string | null
+                    assignee_ids?: string[] | null
                     created_at?: string | null
                     deal_id?: string
                     due_date?: string | null
@@ -327,6 +330,53 @@ export type Database = {
                     },
                 ]
             }
+            internal_projects: {
+                Row: {
+                    category: string
+                    created_at: string | null
+                    created_by: string | null
+                    description: string | null
+                    due_date: string | null
+                    id: string
+                    progress: number | null
+                    start_date: string | null
+                    status: string | null
+                    title: string
+                }
+                Insert: {
+                    category: string
+                    created_at?: string | null
+                    created_by?: string | null
+                    description?: string | null
+                    due_date?: string | null
+                    id?: string
+                    progress?: number | null
+                    start_date?: string | null
+                    status?: string | null
+                    title: string
+                }
+                Update: {
+                    category?: string
+                    created_at?: string | null
+                    created_by?: string | null
+                    description?: string | null
+                    due_date?: string | null
+                    id?: string
+                    progress?: number | null
+                    start_date?: string | null
+                    status?: string | null
+                    title?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "internal_projects_created_by_fkey"
+                        columns: ["created_by"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
             partnerships: {
                 Row: {
                     created_at: string | null
@@ -392,6 +442,102 @@ export type Database = {
                     updated_at?: string | null
                 }
                 Relationships: []
+            }
+            project_tasks: {
+                Row: {
+                    assignee_id: string | null
+                    assignee_ids: string[] | null
+                    created_at: string | null
+                    description: string | null
+                    due_date: string | null
+                    id: string
+                    priority: string | null
+                    project_id: string | null
+                    status: string | null
+                    title: string
+                }
+                Insert: {
+                    assignee_id?: string | null
+                    assignee_ids?: string[] | null
+                    created_at?: string | null
+                    description?: string | null
+                    due_date?: string | null
+                    id?: string
+                    priority?: string | null
+                    project_id?: string | null
+                    status?: string | null
+                    title: string
+                }
+                Update: {
+                    assignee_id?: string | null
+                    assignee_ids?: string[] | null
+                    created_at?: string | null
+                    description?: string | null
+                    due_date?: string | null
+                    id?: string
+                    priority?: string | null
+                    project_id?: string | null
+                    status?: string | null
+                    title?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "project_tasks_assignee_id_fkey"
+                        columns: ["assignee_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "project_tasks_project_id_fkey"
+                        columns: ["project_id"]
+                        isOneToOne: false
+                        referencedRelation: "internal_projects"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
+            project_history: {
+                Row: {
+                    action_type: string
+                    created_at: string | null
+                    description: string
+                    id: string
+                    project_id: string
+                    user_id: string | null
+                }
+                Insert: {
+                    action_type: string
+                    created_at?: string | null
+                    description: string
+                    id?: string
+                    project_id: string
+                    user_id?: string | null
+                }
+                Update: {
+                    action_type?: string
+                    created_at?: string | null
+                    description?: string
+                    id?: string
+                    project_id?: string
+                    user_id?: string | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "project_history_project_id_fkey"
+                        columns: ["project_id"]
+                        isOneToOne: false
+                        referencedRelation: "internal_projects"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "project_history_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    },
+                ]
             }
             site_settings: {
                 Row: {

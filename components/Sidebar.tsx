@@ -32,11 +32,17 @@ export default function Sidebar({ onNavigate, activePage }: SidebarProps) {
 
       <div className="relative z-10">
         <div className={`h-24 flex items-center justify-center border-b border-glass-border/50 relative transition-all duration-300 ${isCollapsed ? 'px-0' : 'px-8'}`}>
-          <img
-            src={logoKo}
-            alt="K&O"
-            className={`h-9 w-auto object-contain transition-all duration-300 ${isCollapsed ? 'opacity-0 w-0' : 'opacity-100'}`}
-          />
+          {isCollapsed ? (
+            <div className="size-8 bg-gradient-to-tr from-primary/20 to-primary/5 rounded-lg flex items-center justify-center border border-primary/20 transition-all duration-300">
+              <span className="material-symbols-outlined text-primary text-sm">account_balance</span>
+            </div>
+          ) : (
+            <img
+              src={logoKo}
+              alt="K&O"
+              className="h-9 w-auto object-contain transition-all duration-300"
+            />
+          )}
 
           {/* Toggle Button */}
           <button
