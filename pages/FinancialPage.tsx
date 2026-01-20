@@ -10,6 +10,7 @@ import AddRetainerModal from '../components/AddRetainerModal';
 import AddExpenseModal from '../components/AddExpenseModal';
 import RetainerHistoryModal from '../components/RetainerHistoryModal';
 import Header from '../components/Header';
+import EditRetainerPaymentModal from '../components/EditRetainerPaymentModal';
 
 interface FinancialPageProps {
    onNavigate: (view: View, id?: string) => void;
@@ -25,12 +26,25 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
          </Layout>
       );
    }
+
    // Modal States
    const [isRecoveryModalOpen, setIsRecoveryModalOpen] = useState(false);
    const [isRetainerModalOpen, setIsRetainerModalOpen] = useState(false);
    const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
    const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
    const [dropdownPos, setDropdownPos] = useState<any>({ top: 0, left: 0, right: 0 });
+
+   // History & Editing States
+   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+   const [historyView, setHistoryView] = useState<'recoveries' | 'retainers'>('recoveries');
+   const [selectedRetainerId, setSelectedRetainerId] = useState<string | null>(null);
+   const [selectedClientName, setSelectedClientName] = useState('');
+
+   const [editingRetainer, setEditingRetainer] = useState<any>(null);
+   const [editingRecovery, setEditingRecovery] = useState<any>(null);
+
+   const [editingPayment, setEditingPayment] = useState<any>(null);
+   const [isEditPaymentModalOpen, setIsEditPaymentModalOpen] = useState(false);
 
    // Data States
    const [loading, setLoading] = useState(true);
@@ -49,12 +63,9 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
    const [chartData, setChartData] = useState<any[]>([]);
    const [currentMonthPayments, setCurrentMonthPayments] = useState<any[]>([]);
 
-   // History Modal State
-   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
-   const [selectedRetainerId, setSelectedRetainerId] = useState<string | null>(null);
-   const [selectedClientName, setSelectedClientName] = useState('');
-   const [editingRetainer, setEditingRetainer] = useState<any>(null);
-   const [editingRecovery, setEditingRecovery] = useState<any>(null);
+   // History Data
+   const [paidRecoveriesHistory, setPaidRecoveriesHistory] = useState<any[]>([]);
+   const [paidRetainersHistory, setPaidRetainersHistory] = useState<any[]>([]);
 
    const fetchData = async () => {
       setLoading(true);
@@ -65,6 +76,14 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
             .select('*')
             .order('created_at', { ascending: false });
          if (recError) throw recError;
+
+         // Fetch ALL Retainer Payments for History
+         const { data: allPayments, error: payErrorHistory } = await supabase
+            .from('financial_retainer_payments')
+            .select('*')
+            .order('payment_date', { ascending: false });
+
+         if (payErrorHistory) throw payErrorHistory;
 
          // Fetch Retainers
          const { data: retainers, error: retError } = await supabase
@@ -79,39 +98,28 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
             .order('date', { ascending: false });
          if (expError) throw expError;
 
-         // Fetch Current Month Payments
-         const startOfMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
-         const endOfMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString();
-
-         const { data: allRetainerPayments, error: retPayError } = await supabase
-            .from('financial_retainer_payments')
-            .select('*');
-         if (retPayError) throw retPayError;
-
-         const monthPayments = allRetainerPayments?.filter(p => {
+         // Filter Current Month Payments from allPayments
+         const monthPayments = allPayments?.filter(p => {
+            // Use due_date for "Current Month Status" logic if payment_date is null? 
+            // Or better: show "This Month's Due" based on due_date.
             const d = new Date(p.due_date);
             const n = new Date();
             return d.getMonth() === n.getMonth() && d.getFullYear() === n.getFullYear();
-         });
+         }) || [];
 
-         // Mocking original variables to prevent errors if used later (startOfMonth/endOfMonth are defined above, leaving them unused is fine)
-         const payError = null;
-
-         if (payError) throw payError;
-         setCurrentMonthPayments(monthPayments || []);
+         setCurrentMonthPayments(monthPayments);
 
          // --- CALCULATIONS ---
          const paidRecoveries = recoveries?.filter(r => r.status === 'paid') || [];
          const revenueFromRecoveries = (paidRecoveries as any[]).reduce((sum, item) => sum + (item.my_company_amount || 0), 0);
-         // 2. Retainers Revenue (Strictly from Payments)
-         const paidRetainerPayments = (allRetainerPayments as any[])?.filter(p => p.status === 'paid') || [];
+
+         const paidRetainerPayments = (allPayments as any[])?.filter(p => p.status === 'paid') || [];
 
          const retainersMap = new Map(retainers?.map(r => [r.id, r]));
 
          const revenueFromRetainers = paidRetainerPayments.reduce((sum, payment) => {
             const retainer = retainersMap.get(payment.retainer_id);
             if (!retainer) return sum;
-            // Calculate share
             const comm = retainer.commission_percent || 20;
             const share = (payment.amount || 0) * (comm / 100);
             return sum + share;
@@ -156,7 +164,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                const retainer = retainersMap.get(p.retainer_id);
                if (!retainer) return sum;
                const comm = retainer.commission_percent || 20;
-               return sum + ((p.amount || 0) * (comm / 100)); // Calculate share dynamically
+               return sum + ((p.amount || 0) * (comm / 100));
             }, 0);
 
             // Expenses
@@ -180,6 +188,11 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
          });
 
          setFilteredRecoveries([...restitutionRecoveries, ...analysisRecoveries]);
+
+         // Set History Data
+         setPaidRecoveriesHistory(paidRecoveries);
+         setPaidRetainersHistory(paidRetainerPayments);
+
          const activeRetainersList = retainers?.filter(r => r.active) || [];
          setActiveRetainers(activeRetainersList);
          setRecentExpenses(expenses?.slice(0, 10) || []);
@@ -191,6 +204,10 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
          setLoading(false);
       }
    };
+
+   useEffect(() => {
+      fetchData();
+   }, []);
 
    const handleMarkAsPaid = async (retainer: any) => {
       try {
@@ -230,7 +247,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
          const { error } = await supabase
             .from('financial_retainer_payments')
             // @ts-ignore
-            .update({ status: 'pending', payment_date: null }) // Clear payment date?
+            .update({ status: 'pending', payment_date: null })
             .eq('id', paymentId);
          if (error) throw error;
          fetchData();
@@ -276,10 +293,6 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
       setSelectedClientName(retainer.client_name);
       setIsHistoryModalOpen(true);
    };
-
-   useEffect(() => {
-      fetchData();
-   }, []);
 
    return (
       <Layout onNavigate={onNavigate} activePage={activePage}>
@@ -496,7 +509,164 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                   </div>
                </div>
 
-               {/* Tables Section */}
+               {/* REVENUE HISTORY SECTION */}
+               <div className="mt-12 mb-8">
+                  <div className="flex items-center justify-between mb-6">
+                     <div>
+                        <h2 className="text-xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                           <span className="material-symbols-outlined text-primary">history</span>
+                           Histórico de Receita Realizada
+                        </h2>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Visualize e gerencie todas as receitas já compensadas.</p>
+                     </div>
+                     <div className="flex bg-gray-100 dark:bg-gray-800 p-1 rounded-lg">
+                        <button
+                           onClick={() => setHistoryView('recoveries')}
+                           className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${historyView === 'recoveries'
+                              ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                              }`}
+                        >
+                           Recuperações
+                        </button>
+                        <button
+                           onClick={() => setHistoryView('retainers')}
+                           className={`px-4 py-2 text-sm font-medium rounded-md transition-all ${historyView === 'retainers'
+                              ? 'bg-white dark:bg-gray-700 text-primary shadow-sm'
+                              : 'text-gray-500 hover:text-gray-700 dark:hover:text-gray-300'
+                              }`}
+                        >
+                           Mensalistas
+                        </button>
+                     </div>
+                  </div>
+
+                  <div className="glass-card rounded-xl shadow-sm overflow-hidden">
+                     <div className="overflow-x-auto">
+                        {historyView === 'recoveries' ? (
+                           <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400">
+                              <thead className="bg-white/5 text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-glass-border">
+                                 <tr>
+                                    <th className="px-6 py-4 font-semibold">Data</th>
+                                    <th className="px-6 py-4 font-semibold">Cliente</th>
+                                    <th className="px-6 py-4 font-semibold">Valor Bruto Recuperado</th>
+                                    <th className="px-6 py-4 font-semibold">Nossa Receita</th>
+                                    <th className="px-6 py-4 font-semibold text-center">Status</th>
+                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-glass-border">
+                                 {paidRecoveriesHistory.length > 0 ? (
+                                    paidRecoveriesHistory.map((rec) => (
+                                       <tr key={rec.id} className="hover:bg-white/5 transition-colors">
+                                          <td className="px-6 py-4 text-gray-500">
+                                             {new Date(rec.created_at).toLocaleDateString('pt-BR')}
+                                          </td>
+                                          <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                                             {rec.client_name}
+                                          </td>
+                                          <td className="px-6 py-4">
+                                             {rec.total_recovered?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                          </td>
+                                          <td className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-400">
+                                             {rec.my_company_amount?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                          </td>
+                                          <td className="px-6 py-4 text-center">
+                                             <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
+                                                Finalizado
+                                             </span>
+                                          </td>
+                                          <td className="px-6 py-4 text-right">
+                                             <button
+                                                onClick={() => {
+                                                   setEditingRecovery(rec);
+                                                   setIsRecoveryModalOpen(true);
+                                                }}
+                                                className="text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-1.5 rounded-lg transition-colors"
+                                                title="Editar Valores"
+                                             >
+                                                <span className="material-symbols-outlined">edit</span>
+                                             </button>
+                                          </td>
+                                       </tr>
+                                    ))
+                                 ) : (
+                                    <tr>
+                                       <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                          Nenhuma recuperação finalizada no histórico.
+                                       </td>
+                                    </tr>
+                                 )}
+                              </tbody>
+                           </table>
+                        ) : (
+                           <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400">
+                              <thead className="bg-white/5 text-xs uppercase text-gray-500 dark:text-gray-400 border-b border-glass-border">
+                                 <tr>
+                                    <th className="px-6 py-4 font-semibold">Data Pagamento</th>
+                                    <th className="px-6 py-4 font-semibold">Cliente (Mensalista)</th>
+                                    <th className="px-6 py-4 font-semibold">Valor da Mensalidade</th>
+                                    <th className="px-6 py-4 font-semibold">Comissão</th>
+                                    <th className="px-6 py-4 font-semibold">Nossa Receita</th>
+                                    <th className="px-6 py-4 font-semibold text-right">Ações</th>
+                                 </tr>
+                              </thead>
+                              <tbody className="divide-y divide-glass-border">
+                                 {paidRetainersHistory.length > 0 ? (
+                                    paidRetainersHistory.map((payment) => {
+                                       // Look up the retainer for this payment
+                                       const retainer = activeRetainers.find(r => r.id === payment.retainer_id);
+
+                                       const comm = retainer?.commission_percent || 20;
+                                       const share = (payment.amount || 0) * (comm / 100);
+
+                                       return (
+                                          <tr key={payment.id} className="hover:bg-white/5 transition-colors">
+                                             <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
+                                                {payment.payment_date ? new Date(payment.payment_date).toLocaleDateString('pt-BR') : '-'}
+                                             </td>
+                                             <td className="px-6 py-4">
+                                                {retainer?.client_name || <span className="text-gray-400 italic">Cliente Removido/Inativo</span>}
+                                             </td>
+                                             <td className="px-6 py-4">
+                                                {payment.amount?.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                             </td>
+                                             <td className="px-6 py-4 text-xs text-gray-500">
+                                                {comm}%
+                                             </td>
+                                             <td className="px-6 py-4 font-bold text-emerald-600 dark:text-emerald-400">
+                                                {share.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                             </td>
+                                             <td className="px-6 py-4 text-right">
+                                                <button
+                                                   onClick={() => {
+                                                      setEditingPayment(payment);
+                                                      setIsEditPaymentModalOpen(true);
+                                                   }}
+                                                   className="text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-1.5 rounded-lg transition-colors"
+                                                   title="Editar Pagamento"
+                                                >
+                                                   <span className="material-symbols-outlined">edit</span>
+                                                </button>
+                                             </td>
+                                          </tr>
+                                       );
+                                    })
+                                 ) : (
+                                    <tr>
+                                       <td colSpan={6} className="px-6 py-8 text-center text-gray-500">
+                                          Nenhum pagamento registrado no histórico.
+                                       </td>
+                                    </tr>
+                                 )}
+                              </tbody>
+                           </table>
+                        )}
+                     </div>
+                  </div>
+               </div>
+
                {/* Tables Section */}
                <div className="flex flex-col gap-8">
                   {/* Recuperações em Andamento */}
@@ -580,7 +750,6 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                   </div>
 
                   <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
-                     {/* Mensalistas Ativos */}
                      {/* Mensalistas Ativos */}
                      <div className="glass-card rounded-xl shadow-sm">
                         <div className="flex items-center justify-between border-b border-glass-border px-6 py-4">
@@ -796,6 +965,16 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
             }}
             onSuccess={fetchData}
             initialData={editingRecovery}
+         />
+         <EditRetainerPaymentModal
+            isOpen={isEditPaymentModalOpen}
+            onClose={() => {
+               setIsEditPaymentModalOpen(false);
+               setEditingPayment(null);
+            }}
+            onSuccess={fetchData}
+            payment={editingPayment}
+            clientName={activeRetainers.find(r => r.id === editingPayment?.retainer_id)?.client_name || 'Cliente'}
          />
          <AddRetainerModal
             isOpen={isRetainerModalOpen}
