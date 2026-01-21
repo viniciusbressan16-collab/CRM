@@ -59,13 +59,16 @@ export default function LoginPage({ onLogin }: LoginPageProps) {
       <div className="absolute inset-0 z-0">
         {/* Base Image with heavy dark overlay */}
         <div
-          className="absolute inset-0 bg-cover bg-center opacity-30 saturate-0 mix-blend-overlay transition-opacity duration-1000 ease-in-out"
+          className="absolute inset-0 bg-cover bg-center opacity-20 saturate-0 mix-blend-overlay transition-all duration-[3000ms] hover:scale-105 transform-gpu"
           style={{ backgroundImage: "url('https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=2670&auto=format&fit=crop')" }}
         />
         {/* Animated/Static Gradients for Mood */}
-        <div className="absolute inset-0 bg-gradient-to-br from-black via-black/90 to-primary/10" />
-        <div className="absolute top-[-20%] left-[-10%] w-[600px] h-[600px] bg-primary/20 rounded-full blur-[120px] mix-blend-screen opacity-20 animate-pulse-slow" />
-        <div className="absolute bottom-[-10%] right-[-5%] w-[500px] h-[600px] bg-amber-600/10 rounded-full blur-[100px] mix-blend-screen opacity-20" />
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-black/95 to-primary/5" />
+
+        {/* Hypnotic Orbs */}
+        <div className="absolute top-[-20%] left-[-10%] w-[800px] h-[800px] bg-primary/10 rounded-full blur-[100px] mix-blend-screen opacity-20 animate-pulse-slow" style={{ animationDuration: '8s' }} />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[600px] h-[600px] bg-amber-500/10 rounded-full blur-[100px] mix-blend-screen opacity-10 animate-pulse-slow" style={{ animationDuration: '10s', animationDelay: '1s' }} />
+        <div className="absolute top-[40%] left-[20%] w-[400px] h-[400px] bg-white/5 rounded-full blur-[80px] mix-blend-overlay opacity-10 animate-float" style={{ animationDuration: '20s' }} />
       </div>
 
       {/* Main Container */}

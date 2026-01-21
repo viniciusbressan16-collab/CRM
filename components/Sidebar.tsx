@@ -67,22 +67,15 @@ export default function Sidebar({ onNavigate, activePage }: SidebarProps) {
               <button
                 key={item.id}
                 onClick={() => onNavigate(item.id as View)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all group relative duration-500 overflow-hidden mb-1 ${activePage === item.id
-                  ? 'text-slate-900 dark:text-white font-medium'
-                  : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-black/5 dark:hover:bg-white/5'} ${isCollapsed ? 'lg:justify-center' : ''}`}
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all group relative duration-400 overflow-hidden mb-1.5 ${activePage === item.id
+                  ? 'text-slate-900 dark:text-white font-semibold sidebar-active-gold'
+                  : 'text-gray-500 dark:text-gray-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/5 dark:hover:bg-white/5'} ${isCollapsed ? 'lg:justify-center' : ''}`}
               >
-                {/* Active Background - Simple Soft Pill */}
-                {activePage === item.id && (
-                  <div className="absolute inset-0 bg-primary/10 dark:bg-primary/20 transition-all duration-500"></div>
-                )}
+                {/* Hover Shimmer Effect */}
+                <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none animate-shimmer-fast bg-gradient-to-r from-transparent via-white/5 to-transparent"></div>
 
-                {/* Active Indicator - Small Dot instead of Bar */}
-                {activePage === item.id && (
-                  <div className="absolute left-1 top-1/2 -translate-y-1/2 size-1.5 bg-primary rounded-full shadow-[0_0_8px_rgba(229,197,121,0.6)]"></div>
-                )}
-
-                <span className={`material-symbols-outlined text-[20px] relative z-10 transition-all duration-300 ${activePage === item.id ? 'text-primary scale-110 drop-shadow-[0_0_8px_rgba(229,197,121,0.3)]' : 'group-hover:text-primary group-hover:scale-110'}`}>{item.icon}</span>
-                <span className={`block ${isCollapsed ? 'lg:hidden' : 'lg:block'} text-sm relative z-10 text-left tracking-wide whitespace-nowrap`}>{item.label}</span>
+                <span className={`material-symbols-outlined text-[20px] relative z-10 transition-all duration-300 ${activePage === item.id ? 'text-primary' : 'group-hover:text-primary group-hover:scale-110'}`}>{item.icon}</span>
+                <span className={`block ${isCollapsed ? 'lg:hidden' : 'lg:block'} text-sm relative z-10 text-left tracking-wide whitespace-nowrap font-outfit uppercase tracking-widest text-[11px]`}>{item.label}</span>
               </button>
             ))}
         </nav>

@@ -51,12 +51,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                     <div
                         key={toast.id}
                         className={`
-              pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-xl border transition-all duration-500 animate-fade-in-up
+              pointer-events-auto flex items-center gap-3 px-4 py-3 rounded-xl shadow-2xl backdrop-blur-xl border transition-all duration-500 animate-fade-in-up glass-panel-clear
               ${toast.type === 'success'
-                                ? 'bg-slate-900/90 border-[#d4af37]/50 text-white shadow-[0_0_15px_rgba(212,175,55,0.3)]'
+                                ? 'bg-slate-900/80 border-[#d4af37]/40 text-white shadow-[0_0_20px_rgba(212,175,55,0.2)]'
                                 : toast.type === 'error'
-                                    ? 'bg-red-950/90 border-red-500/30 text-white shadow-[0_0_15px_rgba(220,38,38,0.3)]'
-                                    : 'bg-slate-900/90 border-white/10 text-white'}
+                                    ? 'bg-red-950/80 border-red-500/30 text-white shadow-[0_0_20px_rgba(220,38,38,0.2)]'
+                                    : 'bg-slate-900/80 border-white/10 text-white'}
             `}
                     >
                         {toast.type === 'success' && <span className="material-symbols-outlined text-[#d4af37]">check_circle</span>}

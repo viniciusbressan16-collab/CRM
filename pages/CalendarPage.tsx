@@ -64,9 +64,15 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
 
     useEffect(() => {
         if (user) {
+            fetchProfiles();
             fetchData();
         }
-    }, [user, currentDate, currentView]); // Refresh on view change is fine, but we might want to decouple calendar data from validation of task data if it gets heavy
+    }, [user, currentDate, currentView]);
+
+    const fetchProfiles = async () => {
+        const { data: profilesData } = await supabase.from('profiles').select('*');
+        if (profilesData) setProfiles(profilesData);
+    };
 
     // Filter Tasks Logic
     const getFilteredTasks = () => {
@@ -87,19 +93,18 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 if (!taskDate) return false;
                 const d = new Date(taskDate);
                 d.setHours(0, 0, 0, 0);
-                return d.getTime() === today.getTime();
-            }
-            if (filterDate === 'overdue') {
+                if (d.getTime() !== today.getTime()) return false;
+            } else if (filterDate === 'overdue') {
                 if (!taskDate) return false;
-                return taskDate < today && task.status !== 'done';
-            }
-            if (filterDate === 'week') {
+                if (!(taskDate < today && task.status !== 'done')) return false;
+            } else if (filterDate === 'week') {
                 if (!taskDate) return false;
                 const nextWeek = new Date(today);
                 nextWeek.setDate(today.getDate() + 7);
-                return taskDate >= today && taskDate <= nextWeek;
+                if (!(taskDate >= today && taskDate <= nextWeek)) return false;
             }
 
+            // Assignee Filter
             if (filterAssignee !== 'all') {
                 if (!task.assignee_ids || !task.assignee_ids.includes(filterAssignee)) return false;
             }
@@ -128,9 +133,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 endDate.setHours(23, 59, 59, 999);
             }
 
-            // Fetch Appointments
-            const { data: profilesData } = await supabase.from('profiles').select('*');
-            if (profilesData) setProfiles(profilesData);
+            // Profiles fetched separately to avoid reset
 
             const { data: appts, error: apptError } = await supabase
                 .from('appointments')
@@ -171,26 +174,40 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
             if (dealTaskError) throw dealTaskError;
 
             // Normalize and Merge
-            const normalizedProjectTasks = (projectTasks || []).map(t => ({
-                ...t,
-                source: 'project',
-                source_title: t.project?.title,
-                category: t.project?.category
-            }));
+            const normalizedProjectTasks = (projectTasks || []).map(t => {
+                // Normalize assignee_ids
+                const ids = t.assignee_ids || [];
+                if (ids.length === 0 && t.assignee_id) ids.push(t.assignee_id);
 
-            const normalizedDealTasks = (dealTasks || []).map(t => ({
-                id: t.id,
-                title: t.title,
-                description: `Tarefa da oportunidade: ${t.deal?.client_name}`,
-                due_date: t.due_date,
-                status: t.is_completed ? 'done' : 'todo',
-                priority: t.is_urgent ? 'high' : 'medium',
-                project_id: null,
-                assignee_ids: t.assignee_ids,
-                source: 'deal',
-                source_title: t.deal?.client_name,
-                category: 'Vendas'
-            }));
+                return {
+                    ...t,
+                    assignee_ids: ids,
+                    source: 'project',
+                    source_title: t.project?.title,
+                    category: t.project?.category
+                };
+            });
+
+            const normalizedDealTasks = (dealTasks || []).map(t => {
+                // Normalize assignee_ids
+                const ids = t.assignee_ids || [];
+                if (ids.length === 0 && t.assignee_id) ids.push(t.assignee_id);
+
+                return {
+                    id: t.id,
+                    title: t.title,
+                    description: `Tarefa da oportunidade: ${t.deal?.client_name}`,
+                    due_date: t.due_date,
+                    status: t.is_completed ? 'done' : 'todo',
+                    priority: t.is_urgent ? 'high' : 'medium',
+                    project_id: null,
+                    assignee_ids: ids,
+                    assignee_id: t.assignee_id, // Keep for fallback
+                    source: 'deal',
+                    source_title: t.deal?.client_name,
+                    category: 'Vendas'
+                };
+            });
 
             const allTasks = [...normalizedProjectTasks, ...normalizedDealTasks];
             // Sort by due date or status? Let's keep input order or simple sort
@@ -259,7 +276,8 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
     });
 
     // Pagination or limit could apply here, but for now we list all for list view, limit 8 for grid
-    const displayedTasks = taskViewMode === 'grid' ? sortedTasks.slice(0, 8) : sortedTasks;
+    // Limit removed to show all filtered tasks
+    const displayedTasks = taskViewMode === 'grid' ? sortedTasks : sortedTasks;
 
     // Stats based on ALL tasks (unfiltered) or filtered? Usually stats reflect total pending.
     // Let's keep stats based on what's fetched (user's total tasks)
@@ -354,8 +372,8 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 <div className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar">
                     <div className="max-w-[1600px] mx-auto space-y-8">
 
-                        {/* Calendar View Container */}
-                        <div className="glass-panel rounded-2xl overflow-hidden min-h-[600px]">
+                        {/* Calendar View Container - MORE TRANSPARENT */}
+                        <div className="glass-panel-clear rounded-2xl overflow-hidden min-h-[600px] border border-white/5 relative z-10">
                             {currentView === 'week' && (
                                 <div className="flex h-full flex-col overflow-x-auto custom-scrollbar">
                                     <div className="min-w-[1000px] flex flex-col h-full">
@@ -363,9 +381,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <div className="flex border-b border-glass-border">
                                             <div className="w-16 border-r border-glass-border shrink-0 bg-transparent"></div>
                                             {getWeekDays().map(date => (
-                                                <div key={date.toISOString()} className={`flex-1 py-3 text-center border-r border-glass-border last:border-r-0 ${isSameDay(date, new Date()) ? 'bg-primary/10' : ''}`}>
+                                                <div key={date.toISOString()} className={`flex-1 py-3 text-center border-r border-glass-border last:border-r-0 ${isSameDay(date, new Date()) ? 'bg-primary/5' : ''}`}>
                                                     <div className="text-xs font-bold text-gray-500 uppercase">{date.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '')}</div>
-                                                    <div className={`text-xl font-bold mt-1 ${isSameDay(date, new Date()) ? 'text-primary' : 'text-gray-300'}`}>
+                                                    <div className={`text-xl font-bold mt-1 ${isSameDay(date, new Date()) ? 'text-primary' : 'text-slate-700 dark:text-gray-300'}`}>
                                                         {date.getDate().toString().padStart(2, '0')}
                                                     </div>
                                                 </div>
@@ -376,11 +394,11 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <div className="flex-1 overflow-y-auto relative custom-scrollbar h-[500px]">
                                             <div className="flex min-h-[1080px]">
                                                 {/* Time Column (06:00 - 23:00) */}
-                                                <div className="w-16 shrink-0 border-r border-glass-border bg-black/20 z-10 sticky left-0 backdrop-blur-sm">
+                                                <div className="w-16 shrink-0 border-r border-glass-border bg-white/30 dark:bg-black/20 z-10 sticky left-0 backdrop-blur-md">
                                                     {Array.from({ length: 18 }).map((_, i) => {
                                                         const hour = i + 6; // Start at 06:00
                                                         return (
-                                                            <div key={hour} className="h-[60px] text-xs text-gray-500 text-center pt-2 border-b border-white/5 relative">
+                                                            <div key={hour} className="h-[60px] text-xs text-gray-500 text-center pt-2 border-b border-gray-200/10 dark:border-white/5 relative">
                                                                 <span className="relative -top-2.5">{hour.toString().padStart(2, '0')}:00</span>
                                                             </div>
                                                         );
@@ -403,7 +421,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                         <div key={date.toISOString()} className="flex-1 border-r border-glass-border last:border-r-0 relative group">
                                                             {/* Guidelines */}
                                                             {Array.from({ length: 18 }).map((_, i) => (
-                                                                <div key={i} className="h-[60px] border-b border-white/5"></div>
+                                                                <div key={i} className="h-[60px] border-b border-gray-200/10 dark:border-white/5"></div>
                                                             ))}
 
                                                             {/* Current Time Line */}
@@ -432,11 +450,11 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
 
                                                                     if (startHour < startHourGrid) return null;
 
-                                                                    // Styles
+                                                                    // Styles - More Premium
                                                                     const styles = [
-                                                                        { bg: 'bg-primary/20', border: 'border-primary', text: 'text-primary' },
-                                                                        { bg: 'bg-white/10', border: 'border-white/30', text: 'text-gray-200' },
-                                                                        { bg: 'bg-amber-900/40', border: 'border-amber-600', text: 'text-amber-500' },
+                                                                        { bg: 'bg-primary/20 hover:bg-primary/30', border: 'border-primary shadow-[0_0_10px_rgba(212,175,55,0.2)]', text: 'text-slate-900 dark:text-primary' },
+                                                                        { bg: 'bg-indigo-500/20 hover:bg-indigo-500/30', border: 'border-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.2)]', text: 'text-slate-900 dark:text-indigo-200' },
+                                                                        { bg: 'bg-emerald-500/20 hover:bg-emerald-500/30', border: 'border-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.2)]', text: 'text-slate-900 dark:text-emerald-200' },
                                                                     ];
                                                                     const style = styles[appt.title.length % 3];
 
@@ -444,11 +462,11 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                                         <div
                                                                             key={appt.id}
                                                                             onClick={(e) => { e.stopPropagation(); handleOpenApptModal(appt); }}
-                                                                            className={`absolute left-1 right-1 rounded-lg border-l-2 p-2 text-xs backdrop-blur-sm cursor-pointer hover:brightness-110 transition-all ${style.bg} ${style.border}`}
+                                                                            className={`absolute left-1 right-1 rounded-lg border-l-[3px] p-2 text-xs backdrop-blur-md cursor-pointer transition-all ${style.bg} ${style.border}`}
                                                                             style={{ top: `${topOffset}px`, height: `${height}px` }}
                                                                             title={`${appt.title}\n${appt.description || ''}`}
                                                                         >
-                                                                            <div className={`font-bold opacity-80 mb-0.5 ${style.text}`}>
+                                                                            <div className={`font-bold opacity-90 mb-0.5 ${style.text}`}>
                                                                                 {start.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - {end.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                                                                             </div>
                                                                             <div className={`font-medium ${style.text} truncate`}>{appt.title}</div>
@@ -495,8 +513,8 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                 const isToday = isSameDay(date, new Date());
 
                                                 return (
-                                                    <div key={date.toISOString()} className={`min-h-[100px] p-2 rounded-xl border transition-all relative group flex flex-col ${isToday ? 'bg-primary/10 border-primary/30' : 'bg-white/5 border-white/5 hover:border-primary/20'}`}>
-                                                        <span className={`text-sm font-bold w-7 h-7 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-primary text-black' : 'text-gray-400 group-hover:bg-white/10'}`}>
+                                                    <div key={date.toISOString()} className={`min-h-[100px] p-2 rounded-xl border transition-all relative group flex flex-col ${isToday ? 'bg-primary/10 border-primary/30 shadow-[0_0_15px_rgba(212,175,55,0.1)]' : 'bg-white/5 border-white/5 hover:border-primary/20'}`}>
+                                                        <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-primary text-black shadow-lg shadow-primary/30' : 'text-gray-400 group-hover:bg-white/10'}`}>
                                                             {date.getDate()}
                                                         </span>
                                                         <div className="flex-1 space-y-1">
@@ -504,7 +522,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                                 <div
                                                                     key={appt.id}
                                                                     onClick={(e) => { e.stopPropagation(); handleOpenApptModal(appt); }}
-                                                                    className="text-[10px] bg-primary/20 text-primary px-1.5 py-0.5 rounded truncate cursor-pointer hover:bg-primary/30 transition-colors"
+                                                                    className="text-[10px] bg-primary/20 text-slate-900 dark:text-primary px-1.5 py-1 rounded truncate cursor-pointer hover:bg-primary/30 transition-colors font-medium border-l-[2px] border-primary"
                                                                     title={`${new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${appt.title}`}
                                                                 >
                                                                     {new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} {appt.title}
@@ -520,49 +538,51 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                             )}
                         </div>
 
-                        {/* Tasks Of The Day Section - Unchanged */}
-                        <div>
+                        {/* Tasks Of The Day Section */}
+                        <div className="relative z-10">
                             <div className="flex items-center justify-between mb-6">
                                 <div className="flex items-center gap-3">
-                                    <span className="material-symbols-outlined text-primary text-3xl">assignment</span>
-                                    <h2 className="text-2xl font-bold text-white">Tarefas</h2>
+                                    <div className="p-2 bg-gradient-to-br from-primary/20 to-transparent rounded-xl border border-primary/20">
+                                        <span className="material-symbols-outlined text-primary text-3xl">assignment</span>
+                                    </div>
+                                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white">Tarefas</h2>
                                 </div>
                                 <div className="flex items-center gap-4">
-                                    <span className="text-sm font-medium text-gray-500">{completedCount} de {totalCount} concluídas</span>
-                                    <div className="w-32 h-2 bg-gray-800 rounded-full overflow-hidden">
-                                        <div className="h-full bg-primary rounded-full transition-all duration-500" style={{ width: `${progressPercentage}%` }}></div>
+                                    <span className="text-sm font-bold text-gray-500 dark:text-gray-400">{completedCount} / {totalCount} concluídas</span>
+                                    <div className="w-32 h-2.5 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden border border-black/5 dark:border-white/5">
+                                        <div className="animate-stripes h-full bg-gradient-to-r from-primary to-amber-300 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(212,175,55,0.3)]" style={{ width: `${progressPercentage}%` }}></div>
                                     </div>
                                 </div>
                             </div>
 
                             {/* Toolbar: View Mode & Filters */}
-                            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 bg-glass-panel p-3 rounded-xl border border-glass-border">
+                            <div className="flex flex-wrap items-center justify-between gap-4 mb-6 glass-panel-clear p-3 rounded-2xl border border-glass-border shadow-sm">
                                 <div className="flex items-center gap-2">
-                                    <div className="bg-black/20 p-1 rounded-lg flex items-center border border-white/5">
+                                    <div className="bg-gray-100 dark:bg-black/20 p-1 rounded-xl flex items-center border border-black/5 dark:border-white/5">
                                         <button
                                             onClick={() => setTaskViewMode('grid')}
-                                            className={`p-1.5 rounded-md transition-all ${taskViewMode === 'grid' ? 'bg-primary text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                                            className={`p-1.5 rounded-lg transition-all ${taskViewMode === 'grid' ? 'bg-white dark:bg-primary text-black shadow-sm' : 'text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
                                             title="Visualização em Grade"
                                         >
                                             <span className="material-symbols-outlined text-[20px]">grid_view</span>
                                         </button>
                                         <button
                                             onClick={() => setTaskViewMode('list')}
-                                            className={`p-1.5 rounded-md transition-all ${taskViewMode === 'list' ? 'bg-primary text-black shadow-lg' : 'text-gray-400 hover:text-white'}`}
+                                            className={`p-1.5 rounded-lg transition-all ${taskViewMode === 'list' ? 'bg-white dark:bg-primary text-black shadow-sm' : 'text-gray-400 hover:text-slate-900 dark:hover:text-white'}`}
                                             title="Visualização em Lista"
                                         >
                                             <span className="material-symbols-outlined text-[20px]">view_list</span>
                                         </button>
                                     </div>
 
-                                    <div className="h-6 w-px bg-white/10 mx-2"></div>
+                                    <div className="h-6 w-px bg-gray-300 dark:bg-white/10 mx-2"></div>
 
                                     <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
                                         {profile?.role === 'manager' && (
                                             <select
                                                 value={filterAssignee}
                                                 onChange={(e) => setFilterAssignee(e.target.value)}
-                                                className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                                className="bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-xl px-3 py-2 text-slate-700 dark:text-white focus:border-primary outline-none transition-colors hover:bg-white dark:hover:bg-white/5 font-medium min-w-[140px]"
                                             >
                                                 <option value="all">Todos os Responsáveis</option>
                                                 {profiles.map(p => (
@@ -573,9 +593,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <select
                                             value={filterStatus}
                                             onChange={(e) => setFilterStatus(e.target.value as any)}
-                                            className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                            className="bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-xl px-3 py-2 text-slate-700 dark:text-white focus:border-primary outline-none transition-colors hover:bg-white dark:hover:bg-white/5 font-medium"
                                         >
-                                            <option value="all">Todos os Status</option>
+                                            <option value="all">Status: Todos</option>
                                             <option value="pending">Pendentes</option>
                                             <option value="done">Concluídos</option>
                                         </select>
@@ -583,9 +603,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <select
                                             value={filterDate}
                                             onChange={(e) => setFilterDate(e.target.value as any)}
-                                            className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                            className="bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-xl px-3 py-2 text-slate-700 dark:text-white focus:border-primary outline-none transition-colors hover:bg-white dark:hover:bg-white/5 font-medium"
                                         >
-                                            <option value="all">Todas as Datas</option>
+                                            <option value="all">Data: Todas</option>
                                             <option value="today">Hoje</option>
                                             <option value="week">Esta Semana</option>
                                             <option value="overdue">Atrasadas</option>
@@ -594,167 +614,196 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <select
                                             value={filterPriority}
                                             onChange={(e) => setFilterPriority(e.target.value as any)}
-                                            className="bg-black/20 border border-white/10 text-xs rounded-lg px-2 py-1.5 text-white focus:border-primary outline-none"
+                                            className="bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-xl px-3 py-2 text-slate-700 dark:text-white focus:border-primary outline-none transition-colors hover:bg-white dark:hover:bg-white/5 font-medium"
                                         >
-                                            <option value="all">Todas as Prioridades</option>
-                                            <option value="high">Alta Prioridade</option>
+                                            <option value="all">Prioridade: Todas</option>
+                                            <option value="high">Alta</option>
                                             <option value="medium">Média</option>
                                             <option value="low">Baixa</option>
                                         </select>
                                     </div>
                                 </div>
-                                <div className="text-xs text-gray-500 font-medium">
-                                    Exibindo {displayedTasks.length} tarefa(s)
+                                <div className="text-xs text-gray-500 font-bold uppercase tracking-wider px-2">
+                                    {displayedTasks.length} TAREFAS
                                 </div>
                             </div>
 
                             {taskViewMode === 'grid' ? (
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                                     {displayedTasks.map(task => {
                                         const isHigh = task.priority === 'high';
-                                        const tagColor = isHigh ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-primary/10 text-primary border-primary/20';
+                                        const isDone = task.status === 'done';
+                                        const tagColor = isHigh ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-primary/10 text-primary border-primary/20';
 
                                         return (
-                                            <div key={task.id} className="glass-card p-5 border-l-4 border-l-primary flex flex-col justify-between hover:-translate-y-1">
+                                            <div key={task.id} className={`glass-card-premium p-5 rounded-2xl border flex flex-col justify-between group ${isDone ? 'opacity-60 grayscale-[0.5]' : ''}`}>
                                                 <div>
-                                                    <div className="flex justify-between items-start mb-3">
-                                                        <span className={`px-2 py-1 rounded border text-[10px] font-bold uppercase tracking-wider ${tagColor}`}>
-                                                            {task.priority === 'high' ? 'Prioridade Alta' : task.project?.category || 'Geral'}
-                                                        </span>
-                                                        <div className={`size-6 rounded border cursor-pointer flex items-center justify-center transition-all ${task.status === 'done' ? 'bg-primary border-primary' : 'border-gray-600 hover:border-primary'}`} onClick={() => toggleTask(task)}>
-                                                            {task.status === 'done' && <span className="material-symbols-outlined text-black text-sm">check</span>}
+                                                    <div className="flex justify-between items-start mb-4">
+                                                        <div className="flex items-center gap-1.5">
+                                                            {task.is_urgent && (
+                                                                <span className="px-2 py-0.5 rounded border border-red-500/50 bg-red-500/20 text-red-400 text-[10px] font-black uppercase tracking-tighter animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.2)]">
+                                                                    URGENTE
+                                                                </span>
+                                                            )}
+                                                            <span className={`px-2.5 py-1 rounded-lg border text-[10px] font-bold uppercase tracking-wider ${tagColor}`}>
+                                                                {task.priority === 'high' ? 'Alta' : task.priority === 'medium' ? 'Média' : task.priority === 'low' ? 'Baixa' : task.project?.category || 'Geral'}
+                                                            </span>
+                                                        </div>
+                                                        <div
+                                                            className={`size-7 rounded-full border cursor-pointer flex items-center justify-center transition-all duration-300 shadow-sm ${isDone ? 'bg-emerald-500 border-emerald-500 scale-110' : 'bg-white/5 border-gray-400 hover:border-emerald-500 hover:text-emerald-500'}`}
+                                                            onClick={() => toggleTask(task)}
+                                                        >
+                                                            {isDone && <span className="material-symbols-outlined text-white text-sm font-bold">check</span>}
                                                         </div>
                                                     </div>
-                                                    <h3 className="font-bold text-white text-lg mb-2 line-clamp-2">{task.title}</h3>
-                                                    <p className="text-sm text-gray-400 mb-4 line-clamp-2">{task.description || `Tarefa do projeto: ${task.project?.title}`}</p>
+                                                    <h3 className={`font-bold text-lg mb-2 line-clamp-2 transition-all ${isDone ? 'text-gray-500 line-through' : 'text-slate-900 dark:text-gray-100 group-hover:text-primary'}`}>{task.title}</h3>
+                                                    <p className="text-sm text-gray-400 dark:text-gray-500 mb-4 line-clamp-2">{task.description || `Tarefa do projeto: ${task.project?.title}`}</p>
                                                 </div>
 
-                                                <div className="flex items-center justify-between pt-4 border-t border-white/5">
-                                                    <div className="flex items-center gap-2 text-xs text-gray-500 font-medium">
-                                                        <span className="material-symbols-outlined text-[16px]">schedule</span>
+                                                <div className="flex items-center justify-between pt-4 border-t border-glass-border">
+                                                    <div className={`flex items-center gap-2 text-xs font-medium ${task.due_date && new Date(task.due_date) < new Date() && !isDone ? 'text-red-500' : 'text-gray-500'}`}>
+                                                        <span className="material-symbols-outlined text-[16px]">event</span>
                                                         {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : 'Sem data'}
                                                     </div>
-                                                    <button
-                                                        onClick={() => handleOpenTaskModal(task)}
-                                                        className="p-1 hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
-                                                        title="Editar tarefa"
-                                                    >
-                                                        <span className="material-symbols-outlined text-[18px]">edit</span>
-                                                    </button>
-                                                </div>
-                                                <div className="flex -space-x-2 px-1 pb-1 mt-2">
-                                                    {task.assignee_ids && task.assignee_ids.map((uid: string) => {
-                                                        const user = profiles.find(p => p.id === uid);
-                                                        if (!user) return null;
-                                                        return (
-                                                            <div key={uid} className="size-6 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[8px] overflow-hidden hover:scale-110 transition-transform z-0 hover:z-10" title={user.name}>
-                                                                {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
+                                                    <div className="flex items-center gap-1">
+                                                        {task.assignee_ids && task.assignee_ids.length > 0 && (
+                                                            <div className="flex -space-x-2 mr-2">
+                                                                {task.assignee_ids.map((uid: string) => {
+                                                                    const user = profiles.find(p => p.id === uid);
+                                                                    if (!user) return null;
+                                                                    return (
+                                                                        <div key={uid} className="size-6 rounded-full border border-white dark:border-black bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-[9px] overflow-hidden hover:scale-110 transition-transform z-0 hover:z-10 shadow-sm" title={user.name}>
+                                                                            {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
+                                                                        </div>
+                                                                    );
+                                                                })}
                                                             </div>
-                                                        );
-                                                    })}
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleOpenTaskModal(task)}
+                                                            className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
+                                                            title="Editar tarefa"
+                                                        >
+                                                            <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
                                     })}
 
-                                    {/* Add Task Button Card - Only in Grid View */}
+                                    {/* Add Task Button Card */}
                                     <button
                                         onClick={() => handleOpenTaskModal()}
-                                        className="border-2 border-dashed border-gray-700/50 rounded-xl flex flex-col items-center justify-center p-8 hover:bg-white/5 hover:border-primary/30 transition-all gap-3 group min-h-[200px]"
+                                        className="border-2 border-dashed border-gray-300 dark:border-white/10 rounded-2xl flex flex-col items-center justify-center p-8 hover:bg-primary/5 hover:border-primary/50 transition-all gap-3 group min-h-[200px]"
                                     >
-                                        <div className="size-12 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                                            <span className="material-symbols-outlined text-gray-500 group-hover:text-primary text-2xl">add</span>
+                                        <div className="size-14 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center group-hover:bg-primary group-hover:shadow-[0_0_20px_rgba(212,175,55,0.4)] transition-all duration-300">
+                                            <span className="material-symbols-outlined text-gray-400 group-hover:text-black text-3xl">add</span>
                                         </div>
-                                        <span className="font-bold text-gray-500 group-hover:text-primary transition-colors">Nova Tarefa</span>
+                                        <span className="font-bold text-gray-400 group-hover:text-primary transition-colors">Nova Tarefa</span>
                                     </button>
                                 </div>
                             ) : (
-                                <div className="glass-panel rounded-xl overflow-hidden">
+                                <div className="glass-panel-clear rounded-2xl overflow-hidden shadow-sm">
                                     <table className="w-full text-left border-collapse">
                                         <thead>
-                                            <tr className="border-b border-glass-border bg-white/5">
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Tarefa</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Origem</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Origem</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Responsáveis</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Prioridade</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Data</th>
-                                                <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Ações</th>
+                                            <tr className="border-b border-glass-border bg-gray-50/50 dark:bg-white/5">
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center w-16">Status</th>
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Tarefa</th>
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Categoria / Origem</th>
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Responsáveis</th>
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Prioridade</th>
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Data Entrega</th>
+                                                <th className="p-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Ações</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-glass-border">
-                                            {displayedTasks.length > 0 ? displayedTasks.map(task => (
-                                                <tr key={task.id} className="hover:bg-white/5 transition-colors group">
-                                                    <td className="p-4 w-12 text-center">
-                                                        <div
-                                                            onClick={() => toggleTask(task)}
-                                                            className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-all mx-auto ${task.status === 'done' ? 'bg-primary border-primary' : 'border-gray-600 hover:border-primary'}`}
-                                                        >
-                                                            {task.status === 'done' && <span className="material-symbols-outlined text-black text-xs">check</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className={`font-medium transition-all ${task.status === 'done' ? 'text-gray-500 line-through' : 'text-white'}`}>
-                                                            {task.title}
-                                                        </div>
-                                                        {task.description && <div className="text-xs text-gray-500 truncate max-w-[300px]">{task.description}</div>}
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className="text-xs text-gray-400 bg-white/5 px-2 py-1 rounded border border-white/10">
-                                                            {task.project?.category || 'Vendas'}
-                                                        </span>
-                                                        <div className="text-[10px] text-gray-500 mt-1 truncate max-w-[150px]">
-                                                            {task.source === 'deal' ? task.source_title : task.project?.title}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className="flex -space-x-1">
-                                                            {task.assignee_ids && task.assignee_ids.map((uid: string) => {
-                                                                const user = profiles.find(p => p.id === uid);
-                                                                if (!user) return null;
-                                                                return (
-                                                                    <div key={uid} className="size-6 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[8px] overflow-hidden" title={user.name}>
-                                                                        {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
-                                                                    </div>
-                                                                );
-                                                            })}
-                                                            {(!task.assignee_ids || task.assignee_ids.length === 0) && <span className="text-gray-600 text-[10px]">-</span>}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded border ${task.priority === 'high'
-                                                            ? 'bg-red-500/10 text-red-400 border-red-500/20'
-                                                            : task.priority === 'low'
-                                                                ? 'bg-green-500/10 text-green-400 border-green-500/20'
-                                                                : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20'
-                                                            }`}>
-                                                            {task.priority === 'high' ? 'Alta' : task.priority === 'low' ? 'Baixa' : 'Média'}
-                                                        </span>
-                                                    </td>
-                                                    <td className="p-4">
-                                                        <div className={`text-xs font-medium flex items-center gap-1 ${task.due_date && new Date(task.due_date) < new Date() && task.status !== 'done'
-                                                            ? 'text-red-400'
-                                                            : 'text-gray-400'
-                                                            }`}>
-                                                            <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                                                            {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : '-'}
-                                                        </div>
-                                                    </td>
-                                                    <td className="p-4 text-right">
-                                                        <button
-                                                            onClick={() => handleOpenTaskModal(task)}
-                                                            className="p-1.5 hover:bg-white/10 rounded-lg text-gray-500 hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
-                                                            title="Editar"
-                                                        >
-                                                            <span className="material-symbols-outlined text-[18px]">edit</span>
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            )) : (
+                                            {displayedTasks.length > 0 ? displayedTasks.map(task => {
+                                                const isDone = task.status === 'done';
+                                                return (
+                                                    <tr key={task.id} className={`hover:bg-black/5 dark:hover:bg-white/5 transition-colors group ${isDone ? 'bg-gray-50/50 dark:bg-white/5' : ''}`}>
+                                                        <td className="p-4 text-center">
+                                                            <div
+                                                                onClick={() => toggleTask(task)}
+                                                                className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-all mx-auto ${isDone ? 'bg-emerald-500 border-emerald-500' : 'bg-white dark:bg-transparent border-gray-400 hover:border-emerald-500 hover:text-emerald-500'}`}
+                                                            >
+                                                                {isDone && <span className="material-symbols-outlined text-white text-xs font-bold">check</span>}
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className={`font-semibold transition-all ${isDone ? 'text-gray-400 line-through' : 'text-slate-900 dark:text-white'}`}>
+                                                                {task.title}
+                                                            </div>
+                                                            {task.description && <div className="text-xs text-gray-500 truncate max-w-[300px] mt-0.5">{task.description}</div>}
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex flex-col items-start gap-1">
+                                                                <span className="text-[10px] font-bold uppercase text-gray-500 bg-gray-200 dark:bg-white/10 px-1.5 py-0.5 rounded">
+                                                                    {task.project?.category || 'Vendas'}
+                                                                </span>
+                                                                <span className="text-xs text-primary truncate max-w-[150px]">
+                                                                    {task.source === 'deal' ? task.source_title : task.project?.title}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className="flex -space-x-1">
+                                                                {task.assignee_ids && task.assignee_ids.map((uid: string) => {
+                                                                    const user = profiles.find(p => p.id === uid);
+                                                                    if (!user) return null;
+                                                                    return (
+                                                                        <div key={uid} className="size-7 rounded-full border border-white dark:border-black bg-gray-200 dark:bg-gray-800 flex items-center justify-center text-[9px] overflow-hidden" title={user.name}>
+                                                                            {user.avatar_url ? <img src={user.avatar_url} className="w-full h-full object-cover" /> : user.name?.charAt(0).toUpperCase()}
+                                                                        </div>
+                                                                    );
+                                                                })}
+                                                                {(!task.assignee_ids || task.assignee_ids.length === 0) && <span className="text-gray-400 text-xs italic">Não atribuído</span>}
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4 text-center">
+                                                            <div className="flex flex-col items-center gap-1">
+                                                                {task.is_urgent && (
+                                                                    <span className="px-1.5 py-0.5 rounded border border-red-500/50 bg-red-500/20 text-red-400 text-[9px] font-black uppercase tracking-tighter animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.2)]">
+                                                                        URGENTE
+                                                                    </span>
+                                                                )}
+                                                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${task.priority === 'high' || (task as any).priority === 'alta'
+                                                                    ? 'bg-red-500/10 text-red-500 border-red-500/20'
+                                                                    : task.priority === 'low' || (task as any).priority === 'baixa'
+                                                                        ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
+                                                                        : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                                                                    }`}>
+                                                                    {task.priority === 'high' ? 'Alta' : task.priority === 'low' ? 'Baixa' : 'Média'}
+                                                                </span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4">
+                                                            <div className={`text-xs font-medium flex items-center gap-1.5 ${task.due_date && new Date(task.due_date) < new Date() && !isDone
+                                                                ? 'text-red-500'
+                                                                : 'text-gray-500'
+                                                                }`}>
+                                                                <span className="material-symbols-outlined text-[16px]">event</span>
+                                                                {task.due_date ? new Date(task.due_date).toLocaleDateString('pt-BR') : '-'}
+                                                            </div>
+                                                        </td>
+                                                        <td className="p-4 text-right">
+                                                            <button
+                                                                onClick={() => handleOpenTaskModal(task)}
+                                                                className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
+                                                                title="Editar"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[20px]">edit</span>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            }) : (
                                                 <tr>
-                                                    <td colSpan={6} className="p-8 text-center text-gray-500">
-                                                        Nenhuma tarefa encontrada com os filtros atuais.
+                                                    <td colSpan={7} className="p-12 text-center text-gray-500">
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <span className="material-symbols-outlined text-4xl opacity-50">fact_check</span>
+                                                            <p>Nenhuma tarefa encontrada com os filtros atuais.</p>
+                                                        </div>
                                                     </td>
                                                 </tr>
                                             )}

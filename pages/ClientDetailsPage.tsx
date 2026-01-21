@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import Skeleton from '../components/ui/Skeleton';
 import { View } from '../App';
 import Layout from '../components/Layout';
 import AddAppointmentModal from '../components/AddAppointmentModal';
@@ -273,6 +274,171 @@ const EditModal = ({
   );
 };
 
+const TaskModal = ({
+  isOpen,
+  onClose,
+  onSave,
+  taskToEdit,
+  profiles
+}: {
+  isOpen: boolean,
+  onClose: () => void,
+  onSave: (data: any) => void,
+  taskToEdit: DealTask | null,
+  profiles: Profile[]
+}) => {
+  const [title, setTitle] = useState('');
+  const [urgent, setUrgent] = useState(false);
+  const [priority, setPriority] = useState<'baixa' | 'média' | 'alta'>('média');
+  const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (isOpen) {
+      if (taskToEdit) {
+        setTitle(taskToEdit.title);
+        setUrgent(taskToEdit.is_urgent || false);
+        setPriority((taskToEdit as any).priority || (taskToEdit.is_urgent ? 'alta' : 'média'));
+        setDueDate(taskToEdit.due_date ? new Date(taskToEdit.due_date).toISOString().split('T')[0] : '');
+        setAssigneeIds(taskToEdit.assignee_ids || []);
+      } else {
+        setTitle('');
+        setUrgent(false);
+        setPriority('média');
+        setDueDate(new Date().toISOString().split('T')[0]);
+        setAssigneeIds([]);
+      }
+    }
+  }, [isOpen, taskToEdit]);
+
+  if (!isOpen) return null;
+
+  const handleSave = () => {
+    if (!title.trim()) return;
+    onSave({
+      title,
+      is_urgent: urgent || priority === 'alta',
+      priority,
+      due_date: dueDate ? new Date(dueDate).toISOString() : null,
+      assignee_ids: assigneeIds,
+      assignee_id: assigneeIds[0] || null
+    });
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md p-4 animate-in fade-in duration-300">
+      <div className="bg-[#0f0f0f] rounded-2xl shadow-2xl w-full max-w-md border border-white/10 relative overflow-hidden animate-in zoom-in-95 duration-300">
+        <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/[0.02]">
+          <h3 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">{taskToEdit ? 'edit_square' : 'add_task'}</span>
+            {taskToEdit ? 'Editar Tarefa' : 'Nova Tarefa'}
+          </h3>
+          <button onClick={onClose} className="size-8 rounded-full bg-white/5 hover:bg-white/10 text-white/50 hover:text-white flex items-center justify-center transition-all">
+            <span className="material-symbols-outlined text-sm">close</span>
+          </button>
+        </div>
+
+        <div className="p-6 flex flex-col gap-5">
+          <div>
+            <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Título da Tarefa</label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Ex: Enviar proposta comercial"
+              className="w-full rounded-lg border border-white/10 p-3 text-sm bg-black/20 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-3">Prioridade</label>
+            <div className="grid grid-cols-3 gap-2">
+              {(['baixa', 'média', 'alta'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => {
+                    setPriority(p);
+                    if (p === 'alta') setUrgent(true);
+                    else if (urgent) setUrgent(false);
+                  }}
+                  className={`py-2 rounded-lg text-xs font-bold border transition-all uppercase tracking-wider ${priority === p
+                    ? p === 'alta' ? 'bg-red-500 border-red-500 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]' :
+                      p === 'média' ? 'bg-amber-500 border-amber-500 text-white shadow-[0_0_15px_rgba(245,158,11,0.4)]' :
+                        'bg-blue-500 border-blue-500 text-white shadow-[0_0_15px_rgba(59,130,246,0.4)]'
+                    : 'bg-white/5 border-white/10 text-white/40 hover:bg-white/10 hover:border-white/20'}`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Data de Entrega</label>
+              <input
+                type="date"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+                className="w-full rounded-lg border border-white/10 p-2.5 text-xs bg-black/20 text-white focus:border-primary/50 outline-none"
+              />
+            </div>
+            <div className="flex flex-col justify-end">
+              <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer hover:text-white transition-colors py-2.5">
+                <input
+                  type="checkbox"
+                  checked={urgent}
+                  onChange={(e) => {
+                    setUrgent(e.target.checked);
+                    if (e.target.checked) setPriority('alta');
+                  }}
+                  className="rounded border-white/20 bg-black/20 text-red-500 focus:ring-red-500/50"
+                />
+                Marcar como Urgente
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Responsáveis</label>
+            <div className="flex flex-wrap gap-2 p-2 rounded-lg bg-black/20 border border-white/10">
+              {profiles.map(p => {
+                const isSelected = assigneeIds.includes(p.id);
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => {
+                      const newIds = isSelected
+                        ? assigneeIds.filter(id => id !== p.id)
+                        : [...assigneeIds, p.id];
+                      setAssigneeIds(newIds);
+                    }}
+                    title={p.name || ''}
+                    className={`size-8 rounded-full flex items-center justify-center cursor-pointer transition-all border-2 ${isSelected ? 'border-primary ring-2 ring-primary/30' : 'border-transparent opacity-50 hover:opacity-100 hover:border-white/20'}`}
+                  >
+                    {p.avatar_url ? (
+                      <img src={p.avatar_url} className="w-full h-full rounded-full object-cover" alt={p.name || ''} />
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-gray-700 flex items-center justify-center text-[10px] text-white font-bold">
+                        {p.name?.charAt(0).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <button onClick={handleSave} className="w-full bg-primary text-white font-bold py-3.5 rounded-lg mt-2 hover:bg-primary-hover transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-2 group/btn">
+            <span className="material-symbols-outlined text-[20px] group-hover/btn:scale-110 transition-transform">check</span>
+            {taskToEdit ? 'Salvar Alterações' : 'Adicionar Tarefa'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 export default function ClientDetailsPage({ onNavigate, dealId, activePage }: ClientDetailsPageProps) {
   const [deal, setDeal] = useState<DealWithDetails | null>(null);
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
@@ -288,10 +454,15 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState('');
   const [newTaskUrgent, setNewTaskUrgent] = useState(false);
+  const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'done'>('pending');
   const [newTaskDueDate, setNewTaskDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [newTaskAssigneeIds, setNewTaskAssigneeIds] = useState<string[]>([]);
 
-  // Edit Modal State
+  // Task Modal State
+  const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
+  const [editingTask, setEditingTask] = useState<DealTask | null>(null);
+
+  // Edit Modal State (Existing)
   const [editingSection, setEditingSection] = useState<'client' | 'contact' | 'assignee' | 'tags' | null>(null);
   const [editFormData, setEditFormData] = useState<any>({});
   // Fetch profiles for assignee dropdown
@@ -440,27 +611,38 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
   };
 
 
-  const handleAddTask = async () => {
-    if (!newTaskTitle.trim()) return;
+  const handleOpenEditTask = (task: DealTask) => {
+    setEditingTask(task);
+    setIsTaskModalOpen(true);
+  };
+
+  const handleSaveTask = async (data: any) => {
     try {
-      const { error } = await supabase.from('deal_tasks').insert({
-        deal_id: dealId!,
-        title: newTaskTitle,
-        is_urgent: newTaskUrgent,
-        due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
-        assignee_ids: newTaskAssigneeIds,
-        assignee_id: newTaskAssigneeIds[0] || null
-      });
-      if (error) throw error;
-      setNewTaskTitle('');
-      setNewTaskUrgent(false);
-      setNewTaskAssigneeIds([]);
-      setIsAddingTask(false);
+      if (editingTask) {
+        // Update
+        const { error } = await supabase
+          .from('deal_tasks')
+          .update(data)
+          .eq('id', editingTask.id);
+        if (error) throw error;
+      } else {
+        // Insert
+        const { error } = await supabase
+          .from('deal_tasks')
+          .insert({
+            ...data,
+            deal_id: dealId!
+          });
+        if (error) throw error;
+      }
+
+      setIsTaskModalOpen(false);
+      setEditingTask(null);
       fetchTasks();
       fetchHistory();
     } catch (error) {
-      console.error('Error adding task:', error);
-      alert('Erro ao adicionar tarefa.');
+      console.error('Error saving task:', error);
+      alert('Erro ao salvar tarefa.');
     }
   };
 
@@ -588,16 +770,46 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-background-light dark:bg-background-dark text-text-secondary-light">
-        <span className="material-symbols-outlined animate-spin mr-2">refresh</span> Carregando...
+      <div className="flex flex-col h-screen bg-background-light dark:bg-background-dark overflow-hidden">
+        <div className="w-full max-w-[1440px] mx-auto p-4 md:p-8 space-y-8">
+          {/* Header Skeleton */}
+          <div className="flex justify-between items-center animate-fade-in-up">
+            <div className="space-y-3">
+              <Skeleton className="h-12 w-64 md:w-96" />
+              <Skeleton className="h-4 w-48 opacity-60" />
+            </div>
+            <div className="flex gap-3">
+              <Skeleton className="h-10 w-32 rounded-lg" />
+              <Skeleton className="h-10 w-40 rounded-lg" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+            {/* Sidebar Skeleton */}
+            <div className="lg:col-span-4 xl:col-span-3 space-y-6">
+              <Skeleton height={200} className="w-full delay-100 animate-fade-in-up" />
+              <Skeleton height={400} className="w-full delay-200 animate-fade-in-up" />
+              <Skeleton height={150} className="w-full delay-300 animate-fade-in-up" />
+            </div>
+            {/* Main Content Skeleton */}
+            <div className="lg:col-span-8 xl:col-span-9 space-y-6">
+              <Skeleton height={180} className="w-full delay-100 animate-fade-in-up" />
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                <Skeleton height={500} className="w-full delay-200 animate-fade-in-up" />
+                <Skeleton height={500} className="w-full delay-300 animate-fade-in-up" />
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
   if (!deal) {
     return (
-      <div className="flex flex-col h-screen items-center justify-center bg-background-light dark:bg-background-dark text-text-secondary-light gap-4">
-        <p>Oportunidade não encontrada.</p>
+      <div className="flex flex-col h-screen items-center justify-center bg-background-light dark:bg-background-dark text-text-secondary-light gap-4 animate-fade-in-up">
+        <span className="material-symbols-outlined text-6xl opacity-20">search_off</span>
+        <p className="text-lg font-medium">Oportunidade não encontrada.</p>
         <button
           onClick={() => onNavigate('pipeline')}
           className="text-primary hover:underline font-bold"
@@ -621,6 +833,13 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
         profiles={profiles}
         partnerships={partnerships}
         onAddPartnership={createPartnership}
+      />
+      <TaskModal
+        isOpen={isTaskModalOpen}
+        onClose={() => { setIsTaskModalOpen(false); setEditingTask(null); }}
+        onSave={handleSaveTask}
+        taskToEdit={editingTask}
+        profiles={profiles}
       />
       {/* Top Navbar Removed - Managed by Sidebar/Layout context if needed or just use consistent page headers */}
 
@@ -666,10 +885,12 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
 
         {/* Main Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+
+
           {/* Left Sidebar (Profile & Stats) */}
           <aside className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6 sticky top-24">
-            {/* Financial Impact Card */}
-            <div className="bg-primary rounded-xl p-6 text-white shadow-xl shadow-primary/20 relative overflow-hidden group">
+            {/* Financial Impact Card - Stagger 1 */}
+            <div className="animate-fade-in-up delay-100 bg-primary rounded-xl p-6 text-white shadow-xl shadow-primary/20 relative overflow-hidden group">
               {/* Decorative Gradient */}
               <div className="absolute -right-6 -top-6 w-32 h-32 bg-white/10 rounded-full blur-2xl group-hover:bg-white/20 transition-all"></div>
               <div className="relative z-10">
@@ -684,8 +905,8 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
               </div>
             </div>
 
-            {/* Client Details Card */}
-            <div className="glass-card rounded-xl p-0 overflow-hidden shadow-2xl shadow-black/40 border border-white/5">
+            {/* Client Details Card - Stagger 2 */}
+            <div className="animate-fade-in-up delay-200 glass-card-premium rounded-xl p-0 overflow-hidden shadow-2xl shadow-black/40 border border-white/5">
               <div className="p-6 border-b border-white/5 flex items-start justify-between gap-4 group/card relative bg-gradient-to-r from-white/[0.02] to-transparent">
                 <div className="flex gap-5">
                   <div className="size-16 rounded-xl bg-gradient-to-br from-gray-800/80 to-black/80 border border-white/10 flex items-center justify-center p-3 shadow-inner">
@@ -754,8 +975,8 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
               </div>
             </div>
 
-            {/* Associated Companies Card */}
-            <div className="glass-card rounded-xl border border-white/5 p-6 shadow-xl relative group/card">
+            {/* Associated Companies Card - Stagger 3 */}
+            <div className="animate-fade-in-up delay-300 glass-card-premium rounded-xl border border-white/5 p-6 shadow-xl relative group/card">
               <div className="flex justify-between items-center mb-4">
                 <label className="text-[10px] font-bold text-primary/80 uppercase tracking-widest">Empresas Associadas</label>
               </div>
@@ -776,8 +997,8 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
               </div>
             </div>
 
-            {/* Parceria Card */}
-            <div className="glass-card rounded-xl border border-white/5 p-6 shadow-xl relative group/card">
+            {/* Parceria Card - Stagger 4 */}
+            <div className="animate-fade-in-up delay-500 glass-card-premium rounded-xl border border-white/5 p-6 shadow-xl relative group/card">
               <div className="flex justify-between items-center mb-4">
                 <label className="text-[10px] font-bold text-primary/80 uppercase tracking-widest">Parceria Estratégica</label>
                 <div className="opacity-0 group-hover/card:opacity-100 transition-opacity -mr-2">
@@ -797,7 +1018,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
           {/* Right Content Area */}
           <main className="lg:col-span-8 xl:col-span-9 flex flex-col gap-6">
             {/* Process Tracker based on Pipeline */}
-            <div className="glass-card rounded-xl border border-white/5 p-8 shadow-2xl relative overflow-hidden">
+            <div className="glass-card-premium rounded-xl border border-white/5 p-8 shadow-2xl relative overflow-hidden">
               {/* Background Glow */}
               <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -z-10 pointer-events-none"></div>
 
@@ -815,10 +1036,12 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                   {/* Visual Line Background */}
                   <div className="absolute top-4 left-0 w-full h-[2px] bg-white/5 -translate-y-1/2 rounded-full"></div>
                   {/* Active Line Background */}
-                  <div
-                    className="absolute top-4 left-0 h-[2px] bg-gradient-to-r from-primary/50 via-primary to-primary -translate-y-1/2 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(212,175,55,0.5)]"
-                    style={{ width: `${((currentPipelineIndex) / (pipelines.length - 1)) * 100}%` }}
-                  ></div>
+                  {pipelines.length > 1 && (
+                    <div
+                      className="absolute top-4 left-0 h-[2px] bg-gradient-to-r from-primary/50 via-primary to-primary -translate-y-1/2 rounded-full transition-all duration-1000 ease-out shadow-[0_0_10px_rgba(212,175,55,0.5)]"
+                      style={{ width: `${Math.max(0, Math.min(100, (currentPipelineIndex / (pipelines.length - 1)) * 100))}%` }}
+                    ></div>
+                  )}
 
                   <div className="relative flex justify-between w-full">
                     {pipelines.map((step, idx) => {
@@ -922,9 +1145,20 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                       </div>
                       Próximas Tarefas
                     </h4>
-                    <button onClick={() => setIsAddingTask(!isAddingTask)} className="size-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all">
-                      <span className="material-symbols-outlined text-sm">{isAddingTask ? 'close' : 'add'}</span>
-                    </button>
+                    <div className="flex items-center gap-4">
+                      <select
+                        value={taskFilter}
+                        onChange={(e) => setTaskFilter(e.target.value as any)}
+                        className="bg-white/5 border border-white/10 text-xs font-bold text-white/70 rounded-lg px-3 py-1.5 focus:border-primary/50 outline-none transition-all cursor-pointer uppercase tracking-wider"
+                      >
+                        <option value="all" className="bg-gray-900">Todas</option>
+                        <option value="pending" className="bg-gray-900">Pendentes</option>
+                        <option value="done" className="bg-gray-900">Concluídas</option>
+                      </select>
+                      <button onClick={() => setIsAddingTask(!isAddingTask)} className="size-8 rounded-lg bg-white/5 hover:bg-white/10 flex items-center justify-center text-white/50 hover:text-white transition-all">
+                        <span className="material-symbols-outlined text-sm">{isAddingTask ? 'close' : 'add'}</span>
+                      </button>
+                    </div>
                   </div>
 
                   {isAddingTask && (
@@ -973,22 +1207,58 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                         </div>
                       </div>
                       <div className="flex items-center justify-between">
-                        <label className="flex items-center gap-2 text-xs text-white/70 cursor-pointer hover:text-white transition-colors">
-                          <input
-                            type="checkbox"
-                            checked={newTaskUrgent}
-                            onChange={(e) => setNewTaskUrgent(e.target.checked)}
-                            className="rounded border-white/20 bg-black/20 text-red-500 focus:ring-red-500/50"
-                          />
-                          Marcar como Urgente
-                        </label>
-                        <button onClick={handleAddTask} className="text-xs bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all">Adicionar Tarefa</button>
+                        <div className="flex flex-col gap-2">
+                          <label className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Prioridade</label>
+                          <div className="flex gap-2">
+                            {(['baixa', 'média', 'alta'] as const).map((p) => (
+                              <button
+                                key={p}
+                                onClick={() => {
+                                  setNewTaskUrgent(p === 'alta');
+                                  // We can't set a 'newTaskPriority' state directly yet unless we add it
+                                  // but since we are modifying the submit logic, we can just use the UI state
+                                }}
+                                className={`flex-1 py-1.5 rounded-md text-[10px] font-bold border transition-all uppercase tracking-wider ${(p === 'alta' && newTaskUrgent) || (p === 'média' && !newTaskUrgent) // Simple fallback for now
+                                  ? p === 'alta' ? 'bg-red-500/20 border-red-500/50 text-red-400' :
+                                    p === 'média' ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' :
+                                      'bg-blue-500/20 border-blue-500/50 text-blue-400'
+                                  : 'bg-white/5 border-white/10 text-white/30 hover:bg-white/10'
+                                  }`}
+                              >
+                                {p}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleSaveTask({
+                            title: newTaskTitle,
+                            is_urgent: newTaskUrgent,
+                            priority: newTaskUrgent ? 'alta' : 'média',
+                            due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
+                            assignee_ids: newTaskAssigneeIds,
+                            assignee_id: newTaskAssigneeIds[0] || null
+                          }).then(() => {
+                            setNewTaskTitle('');
+                            setNewTaskUrgent(false);
+                            setNewTaskAssigneeIds([]);
+                            setIsAddingTask(false);
+                          })}
+                          className="text-xs bg-primary text-white px-4 py-2 rounded-lg font-bold hover:bg-primary-hover shadow-lg shadow-primary/20 transition-all"
+                        >
+                          Adicionar Tarefa
+                        </button>
                       </div>
                     </div>
                   )}
 
                   <div className="flex flex-col max-h-[400px] overflow-y-auto custom-scrollbar p-2">
-                    {tasks.map((task) => (
+                    {tasks.filter((t: any) => {
+                      if (taskFilter === 'all') return true;
+                      if (taskFilter === 'pending') return !t.is_completed;
+                      if (taskFilter === 'done') return t.is_completed;
+                      return true;
+                    }).map((task) => (
                       <label key={task.id} className={`relative flex items-start gap-4 p-4 rounded-lg hover:bg-white/5 transition-all cursor-pointer group/item border border-transparent hover:border-white/5 ${task.is_completed ? 'opacity-40 grayscale' : ''}`}>
                         <div className="relative pt-0.5">
                           <input
@@ -1003,9 +1273,16 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                         <div className="flex-1">
                           <span className={`text-sm font-medium text-white group-hover/item:text-primary transition-colors block ${task.is_completed ? 'line-through' : ''}`}>{task.title}</span>
                           <div className="flex items-center gap-2 mt-1.5">
-                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${task.is_urgent ? 'text-red-400 border-red-500/30 bg-red-500/10' : 'text-white/40 border-white/10 bg-white/5'}`}>
-                              {formatDateShort(task.due_date)}
+                            <span className={`text-[10px] px-1.5 py-0.5 rounded border ${(task as any).priority === 'alta' || task.is_urgent ? 'text-red-400 border-red-500/30 bg-red-500/10' :
+                              (task as any).priority === 'média' ? 'text-amber-400 border-amber-500/30 bg-amber-500/10' :
+                                (task as any).priority === 'baixa' ? 'text-blue-400 border-blue-500/30 bg-blue-500/10' :
+                                  'text-white/40 border-white/10 bg-white/5'
+                              }`}>
+                              {(task as any).priority ? (task as any).priority.toUpperCase() : formatDateShort(task.due_date)}
                             </span>
+                            {(task as any).priority && (
+                              <span className="text-[10px] text-white/30 font-medium">{formatDateShort(task.due_date)}</span>
+                            )}
                             {task.is_completed && <span className="text-[10px] text-green-400 flex items-center gap-1"><span className="material-symbols-outlined text-[10px]">done_all</span> Concluído</span>}
                           </div>
                           <div className="flex -space-x-1 mt-2">
@@ -1021,7 +1298,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                           </div>
                         </div>
                         <div className="opacity-0 group-hover/item:opacity-100 transition-opacity absolute top-4 right-4" onClick={(e) => e.preventDefault()}>
-                          <ActionMenu onDelete={() => handleDeleteTask(task.id)} />
+                          <ActionMenu onEdit={() => handleOpenEditTask(task)} onDelete={() => handleDeleteTask(task.id)} />
                         </div>
                       </label>
                     ))}

@@ -4,6 +4,7 @@ import Layout from '../components/Layout';
 import KanbanCard from '../components/KanbanCard';
 import NewDealModal from '../components/NewDealModal';
 import ImportDealsModal from '../components/ImportDealsModal';
+import EmptyState from '../components/ui/EmptyState';
 import PipelineListView from '../components/PipelineListView';
 import { View } from '../App';
 import { supabase } from '../lib/supabaseClient';
@@ -185,17 +186,26 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
           id={column.id}
         >
           <div className="min-h-[10px] pb-4 flex flex-col gap-3">
-            {deals.map((deal: any) => (
-              <SortableDealCard
-                key={deal.id}
-                deal={deal}
-                getTagColor={getTagColor}
-                onEdit={() => handleOpenModal(deal)}
-                onDelete={() => handleDeleteDeal(deal.id)}
-                onNavigate={onNavigate}
-                onCompleteTask={onCompleteTask}
+            {deals.length === 0 ? (
+              <EmptyState
+                title="Sem oportunidades"
+                description="Arraste cards para cá ou crie um novo."
+                icon="drag_indicator"
+                className="py-8 opacity-60 hover:opacity-100 transition-opacity duration-300 scale-90"
               />
-            ))}
+            ) : (
+              deals.map((deal: any) => (
+                <SortableDealCard
+                  key={deal.id}
+                  deal={deal}
+                  getTagColor={getTagColor}
+                  onEdit={() => handleOpenModal(deal)}
+                  onDelete={() => handleDeleteDeal(deal.id)}
+                  onNavigate={onNavigate}
+                  onCompleteTask={onCompleteTask}
+                />
+              ))
+            )}
             <button
               onClick={() => handleOpenModal(undefined, column.id)}
               className="w-full py-2 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg text-gray-400 hover:text-primary hover:border-primary hover:bg-primary/5 transition-all flex items-center justify-center gap-2 mt-2 shrink-0 z-10 relative"
@@ -888,7 +898,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
             {/* Add Column Button */}
             {canManageColumns && (
               <button
-                className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-main-light dark:text-text-main-dark hover:bg-gray-50 dark:hover:bg-white/5 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+                className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-main-light dark:text-text-main-dark hover:bg-gray-50 dark:hover:bg-white/5 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all hover:scale-105 active:scale-95"
                 onClick={handleAddColumn}
               >
                 <span className="material-symbols-outlined text-[20px]">view_column</span>
@@ -898,7 +908,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
             {/* Add Deal Button */}
             <button
-              className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20 transition-all"
+              className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 shadow-lg shadow-primary/20 transition-all hover:scale-105 hover:shadow-primary/40 active:scale-95"
               onClick={() => handleOpenModal()}
             >
               <span className="material-symbols-outlined text-[20px]">add</span>

@@ -374,7 +374,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                         trendColor: 'amber'
                      },
                   ].map((kpi, i) => (
-                     <div key={i} className="glass-card rounded-xl p-6 shadow-sm">
+                     <div key={i} className="glass-card-premium rounded-xl p-6 shadow-sm">
                         <div className="mb-4 flex items-center justify-between">
                            <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{kpi.label}</p>
                            <div className={`flex h-8 w-8 items-center justify-center rounded-full bg-${kpi.color}-500/20 text-${kpi.color}-400`}>
@@ -391,10 +391,10 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
 
                {/* Charts Section */}
                <div className="mb-8 grid grid-cols-1 gap-6 lg:grid-cols-3">
-                  <div className="glass-card rounded-xl p-6 shadow-sm lg:col-span-2">
+                  <div className="glass-card-premium rounded-xl p-6 shadow-sm lg:col-span-2 glass-holographic">
                      <div className="mb-6 flex items-center justify-between">
                         <div>
-                           <h3 className="text-base font-bold text-gray-900 dark:text-white">Fluxo Financeiro (Últimos 6 Meses)</h3>
+                           <h3 className="text-base font-bold text-gray-900 dark:text-white font-display">Fluxo Financeiro (Últimos 6 Meses)</h3>
                            <p className="text-sm text-gray-500 dark:text-gray-400">Receitas Realizadas vs Despesas</p>
                         </div>
                      </div>
@@ -475,7 +475,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
 
                   {/* Secondary Stats */}
                   <div className="flex flex-col gap-6 lg:col-span-1">
-                     <div className="flex-1 glass-card rounded-xl p-6 shadow-sm">
+                     <div className="flex-1 glass-card-premium rounded-xl p-6 shadow-sm">
                         <h3 className="mb-4 text-base font-bold text-gray-900 dark:text-white">Volume Recuperado</h3>
                         <div className="flex flex-col gap-4">
                            <div className="relative pt-1">
@@ -541,7 +541,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                      </div>
                   </div>
 
-                  <div className="glass-card rounded-xl shadow-sm overflow-hidden">
+                  <div className="glass-card-premium rounded-xl shadow-sm overflow-hidden">
                      <div className="overflow-x-auto">
                         {historyView === 'recoveries' ? (
                            <table className="w-full text-left text-sm text-gray-600 dark:text-gray-400">
@@ -670,7 +670,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                {/* Tables Section */}
                <div className="flex flex-col gap-8">
                   {/* Recuperações em Andamento */}
-                  <div className="glass-card rounded-xl shadow-sm">
+                  <div className="glass-card-premium rounded-xl shadow-sm">
                      <div className="flex items-center justify-between border-b border-glass-border px-6 py-4">
                         <div className="flex items-center gap-2">
                            <span className="material-symbols-outlined text-amber-500">pending</span>
@@ -751,7 +751,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
 
                   <div className="grid grid-cols-1 gap-8 xl:grid-cols-2">
                      {/* Mensalistas Ativos */}
-                     <div className="glass-card rounded-xl shadow-sm">
+                     <div className="glass-card-premium rounded-xl shadow-sm">
                         <div className="flex items-center justify-between border-b border-glass-border px-6 py-4">
                            <div className="flex items-center gap-2">
                               <span className="material-symbols-outlined text-blue-500">calendar_today</span>

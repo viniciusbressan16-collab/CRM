@@ -539,6 +539,223 @@ export type Database = {
                     },
                 ]
             }
+            project_documents: {
+                Row: {
+                    created_at: string | null
+                    id: string
+                    name: string
+                    project_id: string
+                    size: string | null
+                    type: string | null
+                    url: string | null
+                }
+                Insert: {
+                    created_at?: string | null
+                    id?: string
+                    name: string
+                    project_id: string
+                    size?: string | null
+                    type?: string | null
+                    url?: string | null
+                }
+                Update: {
+                    created_at?: string | null
+                    id?: string
+                    name?: string
+                    project_id?: string
+                    size?: string | null
+                    type?: string | null
+                    url?: string | null
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "project_documents_project_id_fkey"
+                        columns: ["project_id"]
+                        isOneToOne: false
+                        referencedRelation: "internal_projects"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            project_members: {
+                Row: {
+                    created_at: string | null
+                    id: string
+                    project_id: string
+                    role: string
+                    user_id: string
+                }
+                Insert: {
+                    created_at?: string | null
+                    id?: string
+                    project_id: string
+                    role: string
+                    user_id: string
+                }
+                Update: {
+                    created_at?: string | null
+                    id?: string
+                    project_id?: string
+                    role?: string
+                    user_id?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "project_members_project_id_fkey"
+                        columns: ["project_id"]
+                        isOneToOne: false
+                        referencedRelation: "internal_projects"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "project_members_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            financial_recoveries: {
+                Row: {
+                    amount: number
+                    client_name: string
+                    commission_percent: number | null
+                    created_at: string | null
+                    date: string | null
+                    id: string
+                    my_company_amount: number | null
+                    status: string
+                    total_recovered: number | null
+                }
+                Insert: {
+                    amount: number
+                    client_name: string
+                    commission_percent?: number | null
+                    created_at?: string | null
+                    date?: string | null
+                    id?: string
+                    my_company_amount?: number | null
+                    status: string
+                    total_recovered?: number | null
+                }
+                Update: {
+                    amount?: number
+                    client_name?: string
+                    commission_percent?: number | null
+                    created_at?: string | null
+                    date?: string | null
+                    id?: string
+                    my_company_amount?: number | null
+                    status?: string
+                    total_recovered?: number | null
+                }
+                Relationships: []
+            }
+            financial_retainers: {
+                Row: {
+                    active: boolean | null
+                    amount: number
+                    client_name: string
+                    commission_percent: number | null
+                    created_at: string | null
+                    id: string
+                    monthly_fee: number
+                    start_date: string | null
+                }
+                Insert: {
+                    active?: boolean | null
+                    amount: number
+                    client_name: string
+                    commission_percent?: number | null
+                    created_at?: string | null
+                    id?: string
+                    monthly_fee: number
+                    start_date?: string | null
+                }
+                Update: {
+                    active?: boolean | null
+                    amount?: number
+                    client_name?: string
+                    commission_percent?: number | null
+                    created_at?: string | null
+                    id?: string
+                    monthly_fee?: number
+                    start_date?: string | null
+                }
+                Relationships: []
+            }
+            financial_retainer_payments: {
+                Row: {
+                    amount: number
+                    created_at: string | null
+                    date: string | null
+                    due_date: string | null
+                    id: string
+                    payment_date: string | null
+                    retainer_id: string
+                    status: string
+                }
+                Insert: {
+                    amount: number
+                    created_at?: string | null
+                    date?: string | null
+                    due_date?: string | null
+                    id?: string
+                    payment_date?: string | null
+                    retainer_id: string
+                    status: string
+                }
+                Update: {
+                    amount?: number
+                    created_at?: string | null
+                    date?: string | null
+                    due_date?: string | null
+                    id?: string
+                    payment_date?: string | null
+                    retainer_id?: string
+                    status?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "financial_retainer_payments_retainer_id_fkey"
+                        columns: ["retainer_id"]
+                        isOneToOne: false
+                        referencedRelation: "financial_retainers"
+                        referencedColumns: ["id"]
+                    }
+                ]
+            }
+            financial_expenses: {
+                Row: {
+                    amount: number
+                    category: string
+                    created_at: string | null
+                    date: string | null
+                    description: string
+                    id: string
+                    status: string
+                }
+                Insert: {
+                    amount: number
+                    category: string
+                    created_at?: string | null
+                    date?: string | null
+                    description: string
+                    id?: string
+                    status: string
+                }
+                Update: {
+                    amount?: number
+                    category?: string
+                    created_at?: string | null
+                    date?: string | null
+                    description?: string
+                    id?: string
+                    status?: string
+                }
+                Relationships: []
+            }
             site_settings: {
                 Row: {
                     created_at: string | null
@@ -610,12 +827,12 @@ type PublicSchema = Database["public"]
 export type Tables<
     PublicTableNameOrOptions extends
     | keyof (PublicSchema["Tables"] & PublicSchema["Views"])
-    | { schema: keyof Database },
-    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    | { schema: keyof Omit<Database, "__InternalSupabase"> },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? keyof (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
+> = PublicTableNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? (Database[PublicTableNameOrOptions["schema"]]["Tables"] &
         Database[PublicTableNameOrOptions["schema"]]["Views"])[TableName] extends {
             Row: infer R
@@ -634,11 +851,11 @@ export type Tables<
 export type TablesInsert<
     PublicTableNameOrOptions extends
     | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    | { schema: keyof Omit<Database, "__InternalSupabase"> },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
+> = PublicTableNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
         Insert: infer I
     }
@@ -655,11 +872,11 @@ export type TablesInsert<
 export type TablesUpdate<
     PublicTableNameOrOptions extends
     | keyof PublicSchema["Tables"]
-    | { schema: keyof Database },
-    TableName extends PublicTableNameOrOptions extends { schema: keyof Database }
+    | { schema: keyof Omit<Database, "__InternalSupabase"> },
+    TableName extends PublicTableNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? keyof Database[PublicTableNameOrOptions["schema"]]["Tables"]
     : never = never,
-> = PublicTableNameOrOptions extends { schema: keyof Database }
+> = PublicTableNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? Database[PublicTableNameOrOptions["schema"]]["Tables"][TableName] extends {
         Update: infer U
     }
@@ -676,11 +893,11 @@ export type TablesUpdate<
 export type Enums<
     PublicEnumNameOrOptions extends
     | keyof PublicSchema["Enums"]
-    | { schema: keyof Database },
-    EnumName extends PublicEnumNameOrOptions extends { schema: keyof Database }
+    | { schema: keyof Omit<Database, "__InternalSupabase"> },
+    EnumName extends PublicEnumNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? keyof Database[PublicEnumNameOrOptions["schema"]]["Enums"]
     : never = never,
-> = PublicEnumNameOrOptions extends { schema: keyof Database }
+> = PublicEnumNameOrOptions extends { schema: keyof Omit<Database, "__InternalSupabase"> }
     ? Database[PublicEnumNameOrOptions["schema"]]["Enums"][EnumName]
     : PublicEnumNameOrOptions extends keyof PublicSchema["Enums"]
     ? PublicSchema["Enums"][PublicEnumNameOrOptions]

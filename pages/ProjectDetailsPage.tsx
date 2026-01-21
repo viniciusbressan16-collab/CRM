@@ -23,6 +23,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
     const [isMemberModalOpen, setIsMemberModalOpen] = useState(false);
     const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'documents'>('overview');
     const [selectedTask, setSelectedTask] = useState<any>(null);
+    const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'done'>('pending');
 
     const logActivity = async (action: string, description: string) => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -181,7 +182,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
 
     return (
         <Layout activePage={activePage} onNavigate={onNavigate}>
-            <div className="flex flex-col h-full bg-black/20">
+            <div className="flex flex-col h-full">
 
                 <Header
                     title={project.title}
@@ -218,7 +219,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                         <div className="lg:col-span-2 space-y-8">
 
                             {/* Tasks Section */}
-                            <div className="glass-card p-6">
+                            <div className="glass-card-premium p-6">
                                 {/* Specular Highlight */}
                                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50"></div>
 
@@ -229,13 +230,24 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                                         </div>
                                         <h3 className="text-xl font-bold text-white tracking-tight">Lista de Tarefas</h3>
                                     </div>
-                                    <button
-                                        onClick={() => setIsTaskModalOpen(true)}
-                                        className="text-sm font-bold text-primary hover:text-primary-light flex items-center gap-1.5 transition-colors uppercase tracking-wider"
-                                    >
-                                        <span className="material-symbols-outlined text-[18px]">add</span>
-                                        Nova Tarefa
-                                    </button>
+                                    <div className="flex items-center gap-4">
+                                        <select
+                                            value={taskFilter}
+                                            onChange={(e) => setTaskFilter(e.target.value as any)}
+                                            className="bg-white/5 border border-white/10 text-xs font-bold text-white/70 rounded-lg px-3 py-1.5 focus:border-primary/50 outline-none transition-all cursor-pointer uppercase tracking-wider"
+                                        >
+                                            <option value="all" className="bg-gray-900">Todas</option>
+                                            <option value="pending" className="bg-gray-900">Pendentes</option>
+                                            <option value="done" className="bg-gray-900">Concluídas</option>
+                                        </select>
+                                        <button
+                                            onClick={() => setIsTaskModalOpen(true)}
+                                            className="text-sm font-bold text-primary hover:text-primary-light flex items-center gap-1.5 transition-colors uppercase tracking-wider"
+                                        >
+                                            <span className="material-symbols-outlined text-[18px]">add</span>
+                                            Nova Tarefa
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-3">
@@ -248,12 +260,17 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                                     )}
 
                                     {/* Tasks List */}
-                                    {project.tasks?.map((task: any) => (
-                                        <div key={task.id} className="group relative flex items-center gap-4 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-primary/30 transition-all duration-300 cursor-pointer overflow-hidden" onClick={() => toggleTaskStatus(task)}>
+                                    {project.tasks?.filter((t: any) => {
+                                        if (taskFilter === 'all') return true;
+                                        if (taskFilter === 'pending') return t.status !== 'done';
+                                        if (taskFilter === 'done') return t.status === 'done';
+                                        return true;
+                                    }).map((task: any) => (
+                                        <div key={task.id} className="group relative flex items-center gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:border-primary/30 transition-all duration-300 cursor-pointer overflow-hidden" onClick={() => toggleTaskStatus(task)}>
                                             {/* Hover Glow */}
                                             <div className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary/5 to-primary/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
-                                            <div className={`relative z-10 h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all duration-300 ${task.status === 'done' ? 'bg-primary border-primary text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]' : 'border-white/20 group-hover:border-primary/50 bg-black/40'}`}>
+                                            <div className={`relative z-10 h-6 w-6 rounded-lg border-2 flex items-center justify-center transition-all duration-300 ${task.status === 'done' ? 'bg-primary border-primary text-black shadow-[0_0_10px_rgba(212,175,55,0.4)]' : 'border-white/20 group-hover:border-primary/50 bg-black/20'}`}>
                                                 {task.status === 'done' && <span className="material-symbols-outlined text-[16px] font-bold">check</span>}
                                             </div>
                                             <div className="relative z-10 flex-1">
@@ -271,10 +288,19 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                                                     })()}
                                                 </div>
                                             </div>
-                                            <span className={`relative z-10 px-2.5 py-1 text-[10px] font-bold rounded-lg uppercase tracking-wider border ${task.priority === 'high' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
-                                                task.priority === 'medium' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
-                                                    'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                                                }`}>{task.priority === 'low' ? 'Baixa' : task.priority === 'medium' ? 'Média' : task.priority === 'high' ? 'Alta' : task.priority || 'Normal'}</span>
+                                            <div className="flex items-center gap-2">
+                                                {task.is_urgent && (
+                                                    <span className="relative z-10 px-2 py-0.5 text-[10px] font-black rounded border border-red-500/50 bg-red-500/20 text-red-400 uppercase tracking-tighter animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.2)]">
+                                                        URGENTE
+                                                    </span>
+                                                )}
+                                                <span className={`relative z-10 px-2 py-0.5 text-[10px] font-bold rounded border uppercase tracking-wider ${task.priority === 'high' || task.priority === 'alta' ? 'bg-red-500/10 border-red-500/20 text-red-400' :
+                                                    task.priority === 'medium' || task.priority === 'média' ? 'bg-amber-500/10 border-amber-500/20 text-amber-400' :
+                                                        'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+                                                    }`}>
+                                                    {task.priority === 'low' ? 'Baixa' : task.priority === 'medium' ? 'Média' : task.priority === 'high' ? 'Alta' : task.priority || 'Normal'}
+                                                </span>
+                                            </div>
 
                                             <div className="relative z-10 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                                                 <button
@@ -298,7 +324,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                             </div>
 
                             {/* Documents Section */}
-                            <div className="glass-card p-6">
+                            <div className="glass-card-premium p-6">
                                 {/* Specular Highlight */}
                                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50"></div>
 
@@ -319,7 +345,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     {project.documents?.map((doc: any) => (
-                                        <div key={doc.id} className="group relative flex items-start gap-4 p-4 rounded-xl bg-black/20 border border-white/5 hover:border-white/20 hover:bg-white/5 transition-all duration-300">
+                                        <div key={doc.id} className="group relative flex items-start gap-4 p-4 rounded-xl bg-white/5 border border-white/5 hover:border-white/20 hover:bg-white/10 transition-all duration-300">
                                             <div className="h-10 w-10 rounded-lg bg-red-500/10 border border-red-500/20 text-red-500 flex items-center justify-center shrink-0">
                                                 <span className="material-symbols-outlined">description</span>
                                             </div>
@@ -345,7 +371,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                             </div>
 
                             {/* Activity Feed */}
-                            <div className="glass-card p-6">
+                            <div className="glass-card-premium p-6">
                                 {/* Specular Highlight */}
                                 <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50"></div>
 
@@ -375,7 +401,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                         {/* Sidebar (Right, 1 col) */}
                         <div className="space-y-6">
                             {/* Progress Card */}
-                            <div className="glass-card p-8 flex flex-col items-center relative overflow-hidden">
+                            <div className="glass-card-premium p-8 flex flex-col items-center relative overflow-hidden">
                                 {/* Ambient Glow */}
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 blur-[60px] rounded-full pointer-events-none"></div>
 
@@ -441,7 +467,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                             </div>
 
                             {/* Team */}
-                            <div className="glass-card p-6">
+                            <div className="glass-card-premium p-6">
                                 <div className="flex items-center justify-between mb-6">
                                     <h3 className="text-xs font-bold text-white/40 uppercase tracking-[0.2em]">Equipe</h3>
                                     <button
@@ -454,7 +480,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                                 <div className="space-y-4">
                                     {project.members?.map((m: any) => (
                                         <div key={m.profile.id} className="flex items-center gap-3 group">
-                                            <div className="h-10 w-10 rounded-xl bg-black/40 border border-white/10 bg-cover bg-center shadow-inner" style={{ backgroundImage: `url('${m.profile.avatar_url || ''}')` }}></div>
+                                            <div className="h-10 w-10 rounded-xl bg-white/5 border border-white/10 bg-cover bg-center shadow-inner" style={{ backgroundImage: `url('${m.profile.avatar_url || ''}')` }}></div>
                                             <div className="flex-1">
                                                 <p className="text-sm font-bold text-white">{m.profile.name}</p>
                                                 <p className="text-[10px] text-white/40 uppercase tracking-wider">{m.role}</p>
@@ -474,7 +500,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                             </div>
 
                             {/* Timeline */}
-                            <div className="glass-card p-6">
+                            <div className="glass-card-premium p-6">
                                 <h3 className="text-xs font-bold text-white/40 uppercase tracking-[0.2em] mb-6">Cronograma</h3>
                                 <div className="space-y-5">
                                     <div className="flex items-center gap-4">

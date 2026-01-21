@@ -36,14 +36,17 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
   };
 
   return (
-    <div onClick={onClick} className={`relative glass-card p-5 rounded-xl transition-all cursor-pointer group hover:-translate-y-1 hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-[0_10px_30px_-10px_rgba(212,175,55,0.15)] ${highlight ? 'border-l-2 border-l-amber-500' : ''}`}>
-      {/* Hover Gradient Overlay - Golden Tint */}
-      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-primary/0 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 rounded-xl pointer-events-none"></div>
+    <div onClick={onClick} className={`relative glass-card p-5 rounded-xl transition-all cursor-pointer group hover:-translate-y-1 hover:border-primary/50 dark:hover:border-primary/50 hover:shadow-[0_20px_40px_-10px_rgba(212,175,55,0.1)] ${highlight ? 'border-l-2 border-l-amber-500' : ''}`}>
+      {/* Inner Border (Crystal Edge) */}
+      <div className="absolute inset-[1px] rounded-[10px] border border-white/10 pointer-events-none z-10"></div>
+
+      {/* Hover Material Bloom - Golden Tint */}
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/10 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-700 rounded-xl pointer-events-none mix-blend-overlay"></div>
 
       <div className="relative z-10">
         <div className="flex justify-between items-start mb-3">
-          {/* Ghost Tag Style */}
-          <span className={`bg-transparent border border-${tagColor}-500/30 text-${tagColor}-600 dark:text-${tagColor}-400 text-[9px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-wider`}>
+          {/* Ghost Tag Style - Refined */}
+          <span className={`bg-${tagColor}-500/10 border border-${tagColor}-500/20 text-${tagColor}-600 dark:text-${tagColor}-400 text-[9px] font-bold px-2.5 py-1 rounded-md uppercase tracking-widest backdrop-blur-sm shadow-sm`}>
             {tag}
           </span>
           <div className="relative" ref={menuRef}>
@@ -100,9 +103,11 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
               <span>Progresso</span>
               <span>{progress}%</span>
             </div>
-            {/* Sleek Progress Bar */}
-            <div className="w-full bg-gray-100 dark:bg-white/5 rounded-full h-1 overflow-hidden">
-              <div className="bg-primary h-1 rounded-full shadow-[0_0_12px_1px_rgba(212,175,55,0.6)] relative overflow-hidden" style={{ width: `${progress}%` }}></div>
+            {/* Sleek Progress Bar - With Glow Tip */}
+            <div className="w-full bg-gray-100 dark:bg-white/5 rounded-full h-1.5 overflow-hidden border border-white/5">
+              <div className="bg-gradient-to-r from-primary/80 to-primary h-full rounded-full shadow-[0_0_12px_1px_rgba(212,175,55,0.4)] relative" style={{ width: `${progress}%` }}>
+                <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/40 blur-[2px]"></div>
+              </div>
             </div>
           </div>
         )}
