@@ -160,10 +160,12 @@ export type Database = {
                     assignee_ids: string[] | null
                     created_at: string | null
                     deal_id: string
+                    description: string | null
                     due_date: string | null
                     id: string
                     is_completed: boolean | null
                     is_urgent: boolean | null
+                    priority: string | null
                     title: string
                 }
                 Insert: {
@@ -171,10 +173,12 @@ export type Database = {
                     assignee_ids?: string[] | null
                     created_at?: string | null
                     deal_id: string
+                    description?: string | null
                     due_date?: string | null
                     id?: string
                     is_completed?: boolean | null
                     is_urgent?: boolean | null
+                    priority?: string | null
                     title: string
                 }
                 Update: {
@@ -182,10 +186,12 @@ export type Database = {
                     assignee_ids?: string[] | null
                     created_at?: string | null
                     deal_id?: string
+                    description?: string | null
                     due_date?: string | null
                     id?: string
                     is_completed?: boolean | null
                     is_urgent?: boolean | null
+                    priority?: string | null
                     title?: string
                 }
                 Relationships: [

@@ -308,9 +308,9 @@ export default function AddProjectTaskModal({ isOpen, onClose, onSuccess, projec
                                             : 'bg-gray-50 dark:bg-gray-700/30 border-gray-200 dark:border-gray-600 hover:border-primary/50'
                                             }`}
                                     >
-                                        <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold ${isSelected ? 'bg-primary text-black' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'}`}>
-                                            {user.avatar_url ? (
-                                                <img src={user.avatar_url} alt={user.name} className="w-full h-full rounded-full object-cover" />
+                                        <div className={`size-8 rounded-full flex items-center justify-center text-xs font-bold ${isSelected ? 'bg-primary text-black' : 'bg-gray-200 dark:bg-gray-600 text-gray-600 dark:text-gray-300'} overflow-hidden`}>
+                                            {user.avatar_url && (user.avatar_url.startsWith('http') || user.avatar_url.startsWith('/')) ? (
+                                                <img src={user.avatar_url} alt={user.name} className="w-full h-full object-cover" />
                                             ) : (
                                                 user.name?.charAt(0).toUpperCase()
                                             )}

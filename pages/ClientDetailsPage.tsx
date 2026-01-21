@@ -290,6 +290,7 @@ const TaskModal = ({
   const [title, setTitle] = useState('');
   const [urgent, setUrgent] = useState(false);
   const [priority, setPriority] = useState<'baixa' | 'média' | 'alta'>('média');
+  const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
 
@@ -299,12 +300,14 @@ const TaskModal = ({
         setTitle(taskToEdit.title);
         setUrgent(taskToEdit.is_urgent || false);
         setPriority((taskToEdit as any).priority || (taskToEdit.is_urgent ? 'alta' : 'média'));
+        setDescription((taskToEdit as any).description || '');
         setDueDate(taskToEdit.due_date ? new Date(taskToEdit.due_date).toISOString().split('T')[0] : '');
         setAssigneeIds(taskToEdit.assignee_ids || []);
       } else {
         setTitle('');
         setUrgent(false);
         setPriority('média');
+        setDescription('');
         setDueDate(new Date().toISOString().split('T')[0]);
         setAssigneeIds([]);
       }
@@ -319,6 +322,7 @@ const TaskModal = ({
       title,
       is_urgent: urgent || priority === 'alta',
       priority,
+      description,
       due_date: dueDate ? new Date(dueDate).toISOString() : null,
       assignee_ids: assigneeIds,
       assignee_id: assigneeIds[0] || null
@@ -347,6 +351,16 @@ const TaskModal = ({
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Ex: Enviar proposta comercial"
               className="w-full rounded-lg border border-white/10 p-3 text-sm bg-black/20 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-white/70 uppercase tracking-wider mb-2">Descrição</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Detalhes da tarefa..."
+              className="w-full rounded-lg border border-white/10 p-3 text-sm bg-black/20 text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all resize-none h-20"
             />
           </div>
 
