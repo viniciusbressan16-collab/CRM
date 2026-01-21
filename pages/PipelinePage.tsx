@@ -82,6 +82,7 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate, onC
         title={deal.client_name || deal.title}
         value={(deal as any).nextTask || new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(deal.value || 0)}
         avatar={(deal as any).assignee?.avatar_url}
+        assigneeName={(deal as any).assignee?.name}
         time="Hoje"
         progress={deal.progress}
         status={deal.status === 'active' ? undefined : deal.status}
@@ -1029,6 +1030,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                       title={activeDeal.client_name || activeDeal.title}
                       value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(activeDeal.value || 0)}
                       avatar={(activeDeal as any).assignee?.avatar_url}
+                      assigneeName={(activeDeal as any).assignee?.name}
                       time="Hoje"
                       progress={activeDeal.progress}
                       status={activeDeal.status === 'active' ? undefined : activeDeal.status}

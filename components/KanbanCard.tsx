@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function KanbanCard({ tag, tagColor, title, value, avatar, avatarColor, time, highlight, progress, status, alert, onClick, onEdit, onDelete }: any) {
+export default function KanbanCard({ tag, tagColor, title, value, avatar, avatarColor, time, highlight, progress, status, alert, onClick, onEdit, onDelete, assigneeName }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -114,11 +114,13 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
 
         <div className="flex items-center justify-between mt-auto pt-3 border-t border-gray-100 dark:border-white/5">
           <div className="flex -space-x-2.5 hover:space-x-1 transition-all">
-            {avatar ? (
-              (avatar.startsWith('http') || avatar.startsWith('/')) ? (
+            {avatar || assigneeName ? (
+              (avatar && (avatar.startsWith('http') || avatar.startsWith('/'))) ? (
                 <div className="size-7 rounded-full bg-cover border-2 border-white dark:border-zinc-800 shadow-sm transition-transform hover:z-10 hover:scale-110 ring-2 ring-transparent group-hover:ring-primary/20" style={{ backgroundImage: `url('${avatar}')` }}></div>
               ) : (
-                <div className={`size-7 rounded-full ${avatarColor || 'bg-zinc-700'} text-white flex items-center justify-center text-[10px] font-bold border-2 border-white dark:border-zinc-800 shadow-sm transition-transform hover:z-10 hover:scale-110 ring-2 ring-transparent group-hover:ring-primary/20`}>{avatar}</div>
+                <div className={`size-7 rounded-full ${avatarColor || 'bg-zinc-700'} text-white flex items-center justify-center text-[10px] font-bold border-2 border-white dark:border-zinc-800 shadow-sm transition-transform hover:z-10 hover:scale-110 ring-2 ring-transparent group-hover:ring-primary/20`}>
+                  {(avatar || assigneeName || '?').charAt(0).toUpperCase()}
+                </div>
               )
             ) : null}
           </div>
