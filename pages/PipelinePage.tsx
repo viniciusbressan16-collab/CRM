@@ -269,20 +269,49 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   // Filter & Search State
   const [isFilterModalOpen, setIsFilterModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filters, setFilters] = useState<FilterState>({
+
+  // Default filter state
+  const defaultFilters: FilterState = {
     tags: [],
-    assigneeId: null,
-    status: ['active'], // Default to active deals
+    assigneeIds: [],
+    status: ['active'],
     minValue: '',
     maxValue: '',
     startDate: '',
     endDate: ''
+  };
+
+  // Initialize filters from localStorage or default
+  const [filters, setFilters] = useState<FilterState>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('pipeline_filters');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          // Migrate old assigneeId to assigneeIds array if needed
+          if (parsed.assigneeId && !parsed.assigneeIds) {
+            parsed.assigneeIds = [parsed.assigneeId];
+            delete parsed.assigneeId;
+          }
+          // Ensure all required fields exist
+          return { ...defaultFilters, ...parsed };
+        } catch (e) {
+          console.error('Error parsing saved filters:', e);
+        }
+      }
+    }
+    return defaultFilters;
   });
+
+  // Persist filters to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('pipeline_filters', JSON.stringify(filters));
+  }, [filters]);
 
   const activeFiltersCount = useMemo(() => {
     let count = 0;
     if (filters.tags.length > 0) count++;
-    if (filters.assigneeId) count++;
+    if (filters.assigneeIds.length > 0) count++;
     if (filters.status.length > 0 && (filters.status.length !== 1 || filters.status[0] !== 'active')) count++; // Only count if not default
     if (filters.minValue) count++;
     if (filters.maxValue) count++;
@@ -412,7 +441,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       if (filters.tags.length > 0 && (!deal.tag || !filters.tags.includes(deal.tag))) return false;
 
       // Assignee Filter
-      if (filters.assigneeId && deal.assignee_id !== filters.assigneeId) return false;
+      if (filters.assigneeIds.length > 0 && (!deal.assignee_id || !filters.assigneeIds.includes(deal.assignee_id))) return false;
 
       // Value Range Filter
       if (filters.minValue && (deal.value || 0) < parseFloat(filters.minValue)) return false;
@@ -1061,7 +1090,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           onApplyFilters={setFilters}
           onClearFilters={() => setFilters({
             tags: [],
-            assigneeId: null,
+            assigneeIds: [],
             status: ['active'],
             minValue: '',
             maxValue: '',

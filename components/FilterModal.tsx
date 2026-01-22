@@ -6,7 +6,7 @@ type Profile = Database['public']['Tables']['profiles']['Row'];
 
 export interface FilterState {
     tags: string[];
-    assigneeId: string | null;
+    assigneeIds: string[];
     status: string[];
     minValue: string;
     maxValue: string;
@@ -29,7 +29,9 @@ export default function FilterModal({ isOpen, onClose, currentFilters, onApplyFi
 
     useEffect(() => {
         if (isOpen) {
-            setLocalFilters(currentFilters);
+            // Ensure assigneeIds is always an array
+            const safeAssignees = Array.isArray(currentFilters.assigneeIds) ? currentFilters.assigneeIds : [];
+            setLocalFilters({ ...currentFilters, assigneeIds: safeAssignees });
             fetchProfiles();
             fetchPartnerships();
         }
@@ -61,6 +63,16 @@ export default function FilterModal({ isOpen, onClose, currentFilters, onApplyFi
                 return { ...prev, status: prev.status.filter(s => s !== status) };
             } else {
                 return { ...prev, status: [...prev.status, status] };
+            }
+        });
+    };
+
+    const handleAssigneeToggle = (id: string) => {
+        setLocalFilters(prev => {
+            if (prev.assigneeIds.includes(id)) {
+                return { ...prev, assigneeIds: prev.assigneeIds.filter(i => i !== id) };
+            } else {
+                return { ...prev, assigneeIds: [...prev.assigneeIds, id] };
             }
         });
     };
@@ -115,20 +127,29 @@ export default function FilterModal({ isOpen, onClose, currentFilters, onApplyFi
 
                     {/* Responsável */}
                     <div className="space-y-3">
-                        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Responsável</h3>
-                        <div className="relative">
-                            <select
-                                className="w-full h-10 pl-9 pr-3 appearance-none rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all text-slate-700 dark:text-slate-200"
-                                value={localFilters.assigneeId || ''}
-                                onChange={(e) => setLocalFilters({ ...localFilters, assigneeId: e.target.value || null })}
-                            >
-                                <option value="">Todos</option>
-                                {profiles.map(profile => (
-                                    <option key={profile.id} value={profile.id}>{profile.name}</option>
-                                ))}
-                            </select>
-                            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">person</span>
-                            <span className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none text-lg">expand_more</span>
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Responsáveis</h3>
+                            {localFilters.assigneeIds && localFilters.assigneeIds.length > 0 && (
+                                <span className="text-[10px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold">
+                                    {localFilters.assigneeIds.length} selecionado{localFilters.assigneeIds.length !== 1 ? 's' : ''}
+                                </span>
+                            )}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {profiles.map(profile => (
+                                <button
+                                    key={profile.id}
+                                    onClick={() => handleAssigneeToggle(profile.id)}
+                                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-bold border transition-all ${localFilters.assigneeIds.includes(profile.id)
+                                        ? 'bg-primary text-white border-primary shadow-sm'
+                                        : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-primary/50'
+                                        }`}
+                                >
+                                    <div className="size-5 rounded-full bg-cover bg-center border border-white/20" style={{ backgroundImage: `url('${profile.avatar_url || 'https://i.pravatar.cc/150'}')` }}></div>
+                                    {profile.name}
+                                </button>
+                            ))}
+                            {profiles.length === 0 && <p className="text-xs text-slate-500">Carregando consultores...</p>}
                         </div>
                     </div>
 
@@ -159,22 +180,22 @@ export default function FilterModal({ isOpen, onClose, currentFilters, onApplyFi
                         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Valor Estimado</h3>
                         <div className="flex items-center gap-4">
                             <div className="flex-1 relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Min</span>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold pointer-events-none">Min</span>
                                 <input
                                     type="number"
                                     placeholder="0"
-                                    className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                                    className="w-full h-10 !pl-14 pr-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                                     value={localFilters.minValue}
                                     onChange={(e) => setLocalFilters({ ...localFilters, minValue: e.target.value })}
                                 />
                             </div>
                             <span className="text-slate-400">-</span>
                             <div className="flex-1 relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold">Max</span>
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-xs font-bold pointer-events-none">Max</span>
                                 <input
                                     type="number"
                                     placeholder="Sem limite"
-                                    className="w-full h-10 pl-10 pr-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                                    className="w-full h-10 !pl-14 pr-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all"
                                     value={localFilters.maxValue}
                                     onChange={(e) => setLocalFilters({ ...localFilters, maxValue: e.target.value })}
                                 />

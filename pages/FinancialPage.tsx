@@ -458,6 +458,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                                     fillOpacity={1}
                                     fill="url(#colorRevenue)"
                                     strokeWidth={2}
+                                    activeDot={{ r: 6, stroke: '#d4af37', strokeWidth: 2, fill: '#1e1e1e' }}
                                  />
                                  <Area
                                     type="monotone"
@@ -466,6 +467,7 @@ export default function FinancialPage({ onNavigate, activePage }: FinancialPageP
                                     fillOpacity={1}
                                     fill="url(#colorExpense)"
                                     strokeWidth={2}
+                                    activeDot={{ r: 6, stroke: '#fb7185', strokeWidth: 2, fill: '#1e1e1e' }}
                                  />
                               </AreaChart>
                            </ResponsiveContainer>

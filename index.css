@@ -575,6 +575,7 @@ textarea:focus {
   background-position: 0% 0%;
   opacity: 0;
   transition: opacity 0.4s var(--supreme-ease), background-position 0.6s var(--supreme-ease);
+  pointer-events: none;
 }
 
 .glass-holographic:hover::after {

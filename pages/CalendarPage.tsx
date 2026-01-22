@@ -205,6 +205,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                     assignee_id: t.assignee_id, // Keep for fallback
                     source: 'deal',
                     source_title: t.deal?.client_name,
+                    deal_id: t.deal_id, // Ensure deal_id is passed
                     category: 'Vendas'
                 };
             });
@@ -223,6 +224,14 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
             console.error('Error fetching data:', error);
         } finally {
             setLoading(false);
+        }
+    };
+
+    const handleTaskClick = (task: any) => {
+        if (task.source === 'project' && task.project_id) {
+            onNavigate('project_details', task.project_id);
+        } else if (task.source === 'deal' && task.deal_id) {
+            onNavigate('client', task.deal_id);
         }
     };
 
@@ -634,9 +643,14 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         const isHigh = task.priority === 'high';
                                         const isDone = task.status === 'done';
                                         const tagColor = isHigh ? 'bg-red-500/10 text-red-500 border-red-500/20' : 'bg-primary/10 text-primary border-primary/20';
+                                        const isClickable = (task.source === 'project' && task.project_id) || (task.source === 'deal' && task.deal_id);
 
                                         return (
-                                            <div key={task.id} className={`glass-card-premium p-5 rounded-2xl border flex flex-col justify-between group ${isDone ? 'opacity-60 grayscale-[0.5]' : ''}`}>
+                                            <div
+                                                key={task.id}
+                                                className={`glass-card-premium p-5 rounded-2xl border flex flex-col justify-between group ${isDone ? 'opacity-60 grayscale-[0.5]' : ''} ${isClickable ? 'cursor-pointer hover:border-primary/50' : ''}`}
+                                                onClick={() => handleTaskClick(task)}
+                                            >
                                                 <div>
                                                     <div className="flex justify-between items-start mb-4">
                                                         <div className="flex items-center gap-1.5">
@@ -650,8 +664,8 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                             </span>
                                                         </div>
                                                         <div
-                                                            className={`size-7 rounded-full border cursor-pointer flex items-center justify-center transition-all duration-300 shadow-sm ${isDone ? 'bg-emerald-500 border-emerald-500 scale-110' : 'bg-white/5 border-gray-400 hover:border-emerald-500 hover:text-emerald-500'}`}
-                                                            onClick={() => toggleTask(task)}
+                                                            className={`size-7 rounded-full border cursor-pointer flex items-center justify-center transition-all duration-300 shadow-sm ${isDone ? 'bg-emerald-500 border-emerald-500 scale-110 z-10' : 'bg-white/5 border-gray-400 hover:border-emerald-500 hover:text-emerald-500 z-10'}`}
+                                                            onClick={(e) => { e.stopPropagation(); toggleTask(task); }}
                                                         >
                                                             {isDone && <span className="material-symbols-outlined text-white text-sm font-bold">check</span>}
                                                         </div>
@@ -680,8 +694,8 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                             </div>
                                                         )}
                                                         <button
-                                                            onClick={() => handleOpenTaskModal(task)}
-                                                            className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
+                                                            onClick={(e) => { e.stopPropagation(); handleOpenTaskModal(task); }}
+                                                            className="p-1.5 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors z-10"
                                                             title="Editar tarefa"
                                                         >
                                                             <span className="material-symbols-outlined text-[18px]">edit</span>
@@ -720,18 +734,24 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <tbody className="divide-y divide-glass-border">
                                             {displayedTasks.length > 0 ? displayedTasks.map(task => {
                                                 const isDone = task.status === 'done';
+                                                const isClickable = (task.source === 'project' && task.project_id) || (task.source === 'deal' && task.deal_id);
+
                                                 return (
-                                                    <tr key={task.id} className={`hover:bg-black/5 dark:hover:bg-white/5 transition-colors group ${isDone ? 'bg-gray-50/50 dark:bg-white/5' : ''}`}>
+                                                    <tr
+                                                        key={task.id}
+                                                        className={`hover:bg-black/5 dark:hover:bg-white/5 transition-colors group ${isDone ? 'bg-gray-50/50 dark:bg-white/5' : ''} ${isClickable ? 'cursor-pointer' : ''}`}
+                                                        onClick={() => handleTaskClick(task)}
+                                                    >
                                                         <td className="p-4 text-center">
                                                             <div
-                                                                onClick={() => toggleTask(task)}
+                                                                onClick={(e) => { e.stopPropagation(); toggleTask(task); }}
                                                                 className={`size-5 rounded border cursor-pointer flex items-center justify-center transition-all mx-auto ${isDone ? 'bg-emerald-500 border-emerald-500' : 'bg-white dark:bg-transparent border-gray-400 hover:border-emerald-500 hover:text-emerald-500'}`}
                                                             >
                                                                 {isDone && <span className="material-symbols-outlined text-white text-xs font-bold">check</span>}
                                                             </div>
                                                         </td>
                                                         <td className="p-4">
-                                                            <div className={`font-semibold transition-all ${isDone ? 'text-gray-400 line-through' : 'text-slate-900 dark:text-white'}`}>
+                                                            <div className={`font-semibold transition-all group-hover:text-primary ${isDone ? 'text-gray-400 line-through' : 'text-slate-900 dark:text-white'}`}>
                                                                 {task.title}
                                                             </div>
                                                             {task.description && <div className="text-xs text-gray-500 truncate max-w-[300px] mt-0.5">{task.description}</div>}
@@ -788,7 +808,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                         </td>
                                                         <td className="p-4 text-right">
                                                             <button
-                                                                onClick={() => handleOpenTaskModal(task)}
+                                                                onClick={(e) => { e.stopPropagation(); handleOpenTaskModal(task); }}
                                                                 className="p-2 hover:bg-black/5 dark:hover:bg-white/10 rounded-lg text-gray-400 hover:text-primary transition-colors"
                                                                 title="Editar"
                                                             >

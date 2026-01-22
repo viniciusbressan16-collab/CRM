@@ -17,9 +17,49 @@ export default function InternalProjectsPage({ onNavigate, activePage }: Interna
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const [categoryFilter, setCategoryFilter] = useState('Todos');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'in_progress' | 'delayed' | 'completed'>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const [projectToEdit, setProjectToEdit] = useState<any>(null);
+
+  // State with Persistence
+  const [categoryFilter, setCategoryFilter] = useState(() => localStorage.getItem('taxcrm_projects_category_filter') || 'Todos');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'in_progress' | 'delayed' | 'completed'>(() => (localStorage.getItem('taxcrm_projects_status_filter') as any) || 'all');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => (localStorage.getItem('taxcrm_projects_view_mode') as any) || 'grid');
+
+  const [visibleColumns, setVisibleColumns] = useState<string[]>(() => {
+    const saved = localStorage.getItem('taxcrm_projects_visible_columns');
+    return saved ? JSON.parse(saved) : ['project', 'status', 'next_steps', 'members', 'progress', 'due_date', 'actions'];
+  });
+
+  // Persistence Effects
+  useEffect(() => { localStorage.setItem('taxcrm_projects_category_filter', categoryFilter); }, [categoryFilter]);
+  useEffect(() => { localStorage.setItem('taxcrm_projects_status_filter', statusFilter); }, [statusFilter]);
+  useEffect(() => { localStorage.setItem('taxcrm_projects_view_mode', viewMode); }, [viewMode]);
+  useEffect(() => { localStorage.setItem('taxcrm_projects_visible_columns', JSON.stringify(visibleColumns)); }, [visibleColumns]);
+
+  // Column Customization
+  const ALL_COLUMNS = [
+    { id: 'project', label: 'Projeto' },
+    { id: 'status', label: 'Status' },
+    { id: 'members', label: 'Membros' },
+    { id: 'progress', label: 'Progresso' },
+    { id: 'due_date', label: 'Prazo' },
+    { id: 'next_steps', label: 'Próximos Passos' },
+    { id: 'category', label: 'Categoria' },
+    { id: 'budget', label: 'Orçamento' },
+    { id: 'priority', label: 'Prioridade' },
+    { id: 'actions', label: 'Ações' }
+  ];
+
+  const [showColumnPicker, setShowColumnPicker] = useState(false);
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+
+  // Helper to toggle column visibility
+  const toggleColumn = (columnId: string) => {
+    setVisibleColumns(prev =>
+      prev.includes(columnId)
+        ? prev.filter(c => c !== columnId)
+        : [...prev, columnId]
+    );
+  };
 
   useEffect(() => {
     fetchProjects();
@@ -36,7 +76,8 @@ export default function InternalProjectsPage({ onNavigate, activePage }: Interna
           members:project_members(
              role,
              profile:profiles(id, name, avatar_url)
-          )
+          ),
+          tasks:project_tasks(id, title, status, due_date)
         `)
         .order('created_at', { ascending: false });
 
@@ -77,6 +118,44 @@ export default function InternalProjectsPage({ onNavigate, activePage }: Interna
   // Stats
   const activeCount = projects.filter(p => p.status === 'in_progress').length;
   // TODO: Implement real dates logic for "Next Due"
+
+  // Status Update Logic
+  const handleStatusUpdate = async (projectId: string, newStatus: string) => {
+    // Optimistic update
+    setProjects(prev => prev.map(p =>
+      p.id === projectId ? { ...p, status: newStatus } : p
+    ));
+    setEditingStatusId(null);
+
+    try {
+      const { error } = await supabase
+        .from('internal_projects')
+        .update({ status: newStatus })
+        .eq('id', projectId);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error('Error updating status:', error);
+      fetchProjects(); // Revert on error
+      alert('Erro ao atualizar status.');
+    }
+  };
+
+  // Helper to find next step
+  const getNextStep = (tasks: any[]) => {
+    console.log('Tasks for Next Step:', tasks);
+    if (!tasks || tasks.length === 0) return null;
+    // Filter pending tasks
+    const pending = tasks.filter(t => t.status !== 'done');
+    if (pending.length === 0) return null;
+
+    // Sort by due date (asc) or title
+    return pending.sort((a, b) => {
+      if (!a.due_date) return 1;
+      if (!b.due_date) return -1;
+      return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+    })[0];
+  };
 
   return (
     <Layout activePage={activePage} onNavigate={onNavigate}>
@@ -173,6 +252,37 @@ export default function InternalProjectsPage({ onNavigate, activePage }: Interna
                 </button>
               </div>
               <div className="h-6 w-px bg-white/10 mx-2"></div>
+
+              {/* Column Picker */}
+              <div className="relative">
+                <button
+                  onClick={() => setShowColumnPicker(!showColumnPicker)}
+                  className="bg-black/20 border border-white/10 text-xs rounded-lg px-3 py-2 text-white hover:bg-white/5 flex items-center gap-2 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[16px]">view_column</span>
+                  Colunas
+                </button>
+
+                {showColumnPicker && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={() => setShowColumnPicker(false)}></div>
+                    <div className="absolute top-full left-0 mt-2 w-56 bg-[#0a0a0a] border border-white/10 rounded-xl shadow-2xl z-20 p-2 flex flex-col gap-1 backdrop-blur-xl">
+                      <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">Exibir Colunas</div>
+                      {ALL_COLUMNS.map(col => (
+                        <label key={col.id} className="flex items-center gap-3 px-3 py-2 hover:bg-white/5 rounded-lg cursor-pointer transition-colors group">
+                          <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${visibleColumns.includes(col.id) ? 'bg-primary border-primary' : 'border-gray-600 bg-transparent group-hover:border-gray-500'}`}>
+                            {visibleColumns.includes(col.id) && <span className="material-symbols-outlined text-[12px] text-black font-bold">check</span>}
+                          </div>
+                          <span className={`text-xs ${visibleColumns.includes(col.id) ? 'text-white font-medium' : 'text-gray-400'}`}>{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="h-6 w-px bg-white/10 mx-2"></div>
+
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value as any)}
@@ -238,78 +348,195 @@ export default function InternalProjectsPage({ onNavigate, activePage }: Interna
               </button>
             </div>
           ) : (
-            <div className="glass-panel rounded-xl overflow-hidden mb-8">
+            <div className="glass-panel rounded-xl mb-8">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-glass-border bg-white/5">
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Projeto</th>
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Categoria</th>
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Membros</th>
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Progresso</th>
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Prazo</th>
-                    <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Ações</th>
+                    {ALL_COLUMNS.map(col => visibleColumns.includes(col.id) && (
+                      <th key={col.id} className={`p-4 text-xs font-bold text-gray-400 uppercase tracking-wider ${col.id === 'actions' ? 'text-right' : ''}`}>
+                        {col.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-glass-border">
                   {loading ? (
-                    <tr><td colSpan={7} className="p-8 text-center text-gray-500">Carregando...</td></tr>
+                    <tr><td colSpan={visibleColumns.length} className="p-8 text-center text-gray-500">Carregando...</td></tr>
                   ) : filteredProjects.length === 0 ? (
-                    <tr><td colSpan={7} className="p-8 text-center text-gray-500">Nenhum projeto encontrado.</td></tr>
+                    <tr><td colSpan={visibleColumns.length} className="p-8 text-center text-gray-500">Nenhum projeto encontrado.</td></tr>
                   ) : filteredProjects.map(project => (
                     <tr key={project.id} onClick={() => onNavigate('project_details', project.id)} className="hover:bg-white/5 transition-colors cursor-pointer group">
-                      <td className="p-4 w-12 text-center">
-                        <div className={`size-3 rounded-full ${project.status === 'in_progress' ? 'bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.5)]' :
-                          project.status === 'delayed' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' :
-                            project.status === 'completed' ? 'bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]' :
-                              'bg-gray-500'
-                          }`}></div>
-                      </td>
-                      <td className="p-4">
-                        <div className="font-bold text-white mb-1">{project.title}</div>
-                        <div className="text-xs text-gray-500 truncate max-w-[300px]">{project.description}</div>
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-1 rounded border border-white/10 text-[10px] font-medium uppercase tracking-wider text-gray-400 bg-white/5">
-                          {project.category}
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex -space-x-2">
-                          {project.members && project.members.slice(0, 4).map((m: any, idx: number) => (
-                            <div key={idx} className="size-8 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[10px] overflow-hidden" title={m.profile?.name}>
-                              {m.profile?.avatar_url ? <img src={m.profile.avatar_url} className="w-full h-full object-cover" /> : m.profile?.name?.charAt(0).toUpperCase()}
+                      {ALL_COLUMNS.map(col => {
+                        if (!visibleColumns.includes(col.id)) return null;
+
+                        // Render Project Cell
+                        if (col.id === 'project') return (
+                          <td key={col.id} className="p-4">
+                            <div className="font-bold text-white mb-1">{project.title}</div>
+                            <div className="text-xs text-gray-500 truncate max-w-[300px]">{project.description}</div>
+                          </td>
+                        );
+
+                        // Render Status Cell with Inline Edit
+                        if (col.id === 'status') return (
+                          <td key={col.id} className={`p-4 relative ${editingStatusId === project.id ? 'z-50' : 'z-10'}`}>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setEditingStatusId(editingStatusId === project.id ? null : project.id); }}
+                              className={`px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border hover:opacity-80 transition-opacity ${project.status === 'in_progress' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                project.status === 'delayed' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                  project.status === 'completed' ? 'bg-green-500/10 text-green-400 border-green-500/20' :
+                                    'bg-gray-500/10 text-gray-400 border-gray-500/20'
+                                }`}
+                            >
+                              {project.status === 'in_progress' ? 'Em Andamento' :
+                                project.status === 'delayed' ? 'Atrasado' :
+                                  project.status === 'completed' ? 'Concluído' :
+                                    'Pendente'}
+                            </button>
+
+                            {/* Inline Status Dropdown */}
+                            {editingStatusId === project.id && (
+                              <div className="absolute top-full left-4 mt-1 w-40 bg-[#1a1a1a] border border-white/10 rounded-xl shadow-2xl z-20 overflow-hidden flex flex-col p-1 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100">
+                                <div className="fixed inset-0 z-0" onClick={(e) => { e.stopPropagation(); setEditingStatusId(null); }}></div>
+                                {['in_progress', 'delayed', 'completed', 'pending'].map((opt) => (
+                                  <button
+                                    key={opt}
+                                    className="relative z-10 px-3 py-2 text-xs text-left text-gray-300 hover:bg-white/10 rounded-lg transition-colors flex items-center justify-between group"
+                                    onClick={(e) => { e.stopPropagation(); handleStatusUpdate(project.id, opt); }}
+                                  >
+                                    <span>
+                                      {opt === 'in_progress' ? 'Em Andamento' :
+                                        opt === 'delayed' ? 'Atrasado' :
+                                          opt === 'completed' ? 'Concluído' :
+                                            'Pendente'}
+                                    </span>
+                                    {project.status === opt && <span className="material-symbols-outlined text-[14px] text-primary">check</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </td>
+                        );
+
+                        // Render Next Steps Cell
+                        if (col.id === 'next_steps') {
+                          const nextTask = getNextStep(project.tasks);
+                          return (
+                            <td key={col.id} className="p-4">
+                              {nextTask ? (
+                                <div className="flex flex-col gap-0.5 max-w-[200px]">
+                                  <div className="text-xs font-medium text-white truncate" title={nextTask.title}>{nextTask.title}</div>
+                                  {nextTask.due_date && (
+                                    <div className={`text-[10px] flex items-center gap-1 ${new Date(nextTask.due_date) < new Date() ? 'text-red-400' : 'text-gray-500'
+                                      }`}>
+                                      <span className="material-symbols-outlined text-[10px]">event</span>
+                                      {new Date(nextTask.due_date).toLocaleDateString('pt-BR')}
+                                    </div>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-xs text-gray-600 italic">Nada pendente</span>
+                              )}
+                            </td>
+                          );
+                        }
+
+                        // Render Members Cell
+                        if (col.id === 'members') return (
+                          <td key={col.id} className="p-4">
+                            <div className="flex -space-x-2">
+                              {project.members && project.members.slice(0, 4).map((m: any, idx: number) => (
+                                <div key={idx} className="size-8 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[10px] overflow-hidden" title={m.profile?.name}>
+                                  {m.profile?.avatar_url ? <img src={m.profile.avatar_url} className="w-full h-full object-cover" /> : m.profile?.name?.charAt(0).toUpperCase()}
+                                </div>
+                              ))}
+                              {project.members && project.members.length > 4 && (
+                                <div className="size-8 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[10px] text-gray-400">
+                                  +{project.members.length - 4}
+                                </div>
+                              )}
                             </div>
-                          ))}
-                          {project.members && project.members.length > 4 && (
-                            <div className="size-8 rounded-full border border-black bg-gray-800 flex items-center justify-center text-[10px] text-gray-400">
-                              +{project.members.length - 4}
+                          </td>
+                        );
+
+                        // Render Progress Cell
+                        if (col.id === 'progress') return (
+                          <td key={col.id} className="p-4 w-40">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
+                                <div className="h-full bg-primary rounded-full" style={{ width: `${project.progress || 0}%` }}></div>
+                              </div>
+                              <span className="text-xs font-medium text-primary">{project.progress || 0}%</span>
                             </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="p-4 w-40">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-gray-800 rounded-full overflow-hidden">
-                            <div className="h-full bg-primary rounded-full" style={{ width: `${project.progress || 0}%` }}></div>
-                          </div>
-                          <span className="text-xs font-medium text-primary">{project.progress || 0}%</span>
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className={`text-xs font-medium flex items-center gap-1 ${project.due_date && new Date(project.due_date) < new Date() && project.status !== 'completed' ? 'text-red-400' : 'text-gray-400'}`}>
-                          <span className="material-symbols-outlined text-[14px]">calendar_today</span>
-                          {project.due_date ? new Date(project.due_date).toLocaleDateString('pt-BR') : '-'}
-                        </div>
-                      </td>
-                      <td className="p-4 text-right">
-                        <button
-                          className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
-                          onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
-                        >
-                          <span className="material-symbols-outlined text-[18px]">delete</span>
-                        </button>
-                      </td>
+                          </td>
+                        );
+
+                        // Render Due Date Cell
+                        if (col.id === 'due_date') return (
+                          <td key={col.id} className="p-4">
+                            <div className={`text-xs font-medium flex items-center gap-1 ${project.due_date && new Date(project.due_date) < new Date() && project.status !== 'completed' ? 'text-red-400' : 'text-gray-400'}`}>
+                              <span className="material-symbols-outlined text-[14px]">calendar_today</span>
+                              {project.due_date ? new Date(project.due_date).toLocaleDateString('pt-BR') : '-'}
+                            </div>
+                          </td>
+                        );
+
+                        // Render Category Cell (Optional)
+                        if (col.id === 'category') return (
+                          <td key={col.id} className="p-4">
+                            <span className="px-2 py-1 rounded border border-white/10 text-[10px] font-medium uppercase tracking-wider text-gray-400 bg-white/5">
+                              {project.category}
+                            </span>
+                          </td>
+                        );
+
+                        // Render Budget Cell (Optional - Placeholder logic for now)
+                        if (col.id === 'budget') return (
+                          <td key={col.id} className="p-4 text-xs font-medium text-white/70">
+                            {project.budget ? new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(project.budget) : '-'}
+                          </td>
+                        );
+
+                        // Render Priority Cell (Optional - Placeholder logic for now)
+                        if (col.id === 'priority') return (
+                          <td key={col.id} className="p-4">
+                            <div className="flex items-center gap-1">
+                              {project.priority === 'high' && <span className="material-symbols-outlined text-[14px] text-red-500">error</span>}
+                              <span className={`text-xs font-medium ${project.priority === 'high' ? 'text-red-400' : 'text-gray-400'}`}>
+                                {project.priority === 'high' ? 'Alta' : project.priority === 'medium' ? 'Média' : 'Normal'}
+                              </span>
+                            </div>
+                          </td>
+                        );
+
+                        // Render Actions Cell
+                        if (col.id === 'actions') return (
+                          <td key={col.id} className="p-4 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-primary transition-colors opacity-0 group-hover:opacity-100"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setProjectToEdit(project);
+                                  setIsAddModalOpen(true);
+                                }}
+                                title="Editar Projeto"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              <button
+                                className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
+                                onClick={(e) => { e.stopPropagation(); handleDelete(project.id); }}
+                                title="Excluir Projeto"
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </div>
+                          </td>
+                        );
+
+                        return <td key={col.id} className="p-4"></td>;
+                      })}
                     </tr>
                   ))}
                 </tbody>
@@ -321,8 +548,9 @@ export default function InternalProjectsPage({ onNavigate, activePage }: Interna
 
       <AddProjectModal
         isOpen={isAddModalOpen}
-        onClose={() => setIsAddModalOpen(false)}
-        onSuccess={fetchProjects}
+        onClose={() => { setIsAddModalOpen(false); setProjectToEdit(null); }}
+        onSuccess={() => { fetchProjects(); setIsAddModalOpen(false); setProjectToEdit(null); }}
+        projectToEdit={projectToEdit}
       />
     </Layout>
   );
