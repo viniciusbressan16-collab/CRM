@@ -14,6 +14,8 @@ import { hasPermission, PERMISSIONS } from '../utils/roles';
 import {
   DndContext,
   closestCorners,
+  rectIntersection,
+  pointerWithin,
   KeyboardSensor,
   PointerSensor,
   useSensor,
@@ -24,6 +26,7 @@ import {
   DragEndEvent,
   defaultDropAnimationSideEffects,
   DropAnimation,
+  MeasuringStrategy,
   useDroppable,
 } from '@dnd-kit/core';
 import {
@@ -58,7 +61,7 @@ interface PipelineStats {
 
 // --- Helper Components ---
 
-function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void }) {
+const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void }) => {
   const {
     attributes,
     listeners,
@@ -92,7 +95,13 @@ function SortableDealCard({ deal, getTagColor, onEdit, onDelete, onNavigate, onC
       />
     </div>
   );
-}
+}, (prev, next) => {
+  return prev.deal.id === next.deal.id &&
+    prev.deal.pipeline_id === next.deal.pipeline_id &&
+    prev.deal.progress === next.deal.progress &&
+    (prev.deal as any).nextTask === (next.deal as any).nextTask &&
+    prev.deal.value === next.deal.value;
+});
 
 function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask }: any) {
   // Sortable hook for the COLUMN itself
@@ -327,18 +336,18 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   const fetchPipelineData = async (silent = false) => {
     try {
       if (!silent) setLoading(true);
-      const { data: pipelinesData, error: pipelinesError } = await supabase
-        .from('pipelines')
-        .select('*')
-        .order('order_index');
 
-      if (pipelinesError) throw pipelinesError;
+      // Parallelize independent fetches
+      const [pipelinesResult, dealsResult] = await Promise.all([
+        supabase.from('pipelines').select('*').order('order_index'),
+        supabase.from('deals').select(`*, assignee:profiles(name, avatar_url)`),
+      ]);
 
-      const { data: dealsData, error: dealsError } = await supabase
-        .from('deals')
-        .select(`*, assignee:profiles(name, avatar_url)`);
+      if (pipelinesResult.error) throw pipelinesResult.error;
+      if (dealsResult.error) throw dealsResult.error;
 
-      if (dealsError) throw dealsError;
+      const pipelinesData = pipelinesResult.data;
+      const dealsData = dealsResult.data;
 
       const allDeals = (dealsData as any[]) || [];
       const activeDeals = allDeals.filter(d => d.status === 'active');
@@ -682,7 +691,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     }
   };
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
     const activeId = active.id;
     const overId = over?.id;
@@ -703,29 +712,22 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           const newColumns = arrayMove(columns, oldIndex, newIndex);
           setColumns(newColumns);
 
-          // Persist the new order
-          try {
-            // We need to update all columns related to the reorder range, or just all of them to be safe/easy.
-            // Updating all is safer for consistency.
-            const updates = newColumns.map((col, index) => ({
-              id: col.id,
-              name: col.name, // Required by type but not changing
-              order_index: index
-            }));
+          // Persist the new order (Optimistic - Fire & Forget)
+          const updates = newColumns.map((col, index) => ({
+            id: col.id,
+            name: col.name,
+            order_index: index
+          }));
 
-            // In Supabase, can we do upsert? 
-            // Yes, upsert on 'id'.
-            const { error } = await supabase
-              .from('pipelines')
-              .upsert(updates, { onConflict: 'id' });
-
-            if (error) throw error;
-
-          } catch (err) {
-            console.error("Failed to save column order", err);
-            // Revert or show error (optional)
-            // fetchPipelineData(true); // Revert to server state
-          }
+          supabase
+            .from('pipelines')
+            .upsert(updates, { onConflict: 'id' })
+            .then(({ error }) => {
+              if (error) {
+                console.error("Failed to save column order", error);
+                fetchPipelineData(true); // Revert on error
+              }
+            });
         }
       }
       setActiveId(null);
@@ -737,19 +739,29 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     const currentDeal = deals.find(d => d.id === activeId);
 
     if (currentDeal) {
-      try {
-        await supabase
-          .from('deals')
-          .update({ pipeline_id: currentDeal.pipeline_id })
-          .eq('id', currentDeal.id);
+      // Calculate new progress locally
+      const columnIndex = columns.findIndex(c => c.id === currentDeal.pipeline_id);
+      const totalColumns = columns.length;
+      const newProgress = totalColumns > 0 && columnIndex >= 0
+        ? Math.round(((columnIndex + 1) / totalColumns) * 100)
+        : 0;
 
-        // Refresh data to update progress bars
-        fetchPipelineData(true);
-
-      } catch (err) {
-        console.error('Error saving drag:', err);
-        fetchPipelineData(true);
+      // Update local state if progress changed (pipeline_id already updated by DragOver)
+      if (currentDeal.progress !== newProgress) {
+        setDeals(prev => prev.map(d => d.id === activeId ? { ...d, progress: newProgress } : d));
       }
+
+      // Save to server (Optimistic - Fire & Forget)
+      supabase
+        .from('deals')
+        .update({ pipeline_id: currentDeal.pipeline_id })
+        .eq('id', currentDeal.id)
+        .then(({ error }) => {
+          if (error) {
+            console.error('Error saving drag:', error);
+            fetchPipelineData(true); // Revert on error
+          }
+        });
     }
 
     setActiveId(null);
@@ -760,10 +772,12 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     sideEffects: defaultDropAnimationSideEffects({
       styles: {
         active: {
-          opacity: '0.5',
+          opacity: '0.4',
         },
       },
     }),
+    duration: 200,
+    easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
   };
 
   const getTagColor = (tag: string) => {
@@ -810,12 +824,16 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       const firstColumnId = columns[0].id;
 
       const dealsToInsert = importedData.map(row => ({
-        client_name: row['Nome'] || row['Cliente'] || 'Sem Nome',
-        title: `Oportunidade - ${row['Nome'] || 'Novo'}`,
-        value: Number(row['Valor']) || 0,
-        phone: row['Telefone'] || null,
-        email: row['Email'] || null,
-        tag: row['Tag'] || 'Novo',
+        client_name: row.client_name,
+        contact_name: row.contact_name || null,
+        title: row.client_name ? `${row.client_name}` : 'Nova Oportunidade',
+        value: Number(row.value) || 0,
+        phone: row.phone || null,
+        phone_secondary: row.phone_secondary || null,
+        email: row.email || null,
+        cnpj: row.cnpj || null,
+        tag: row.tag || 'Novo',
+        assignee_id: row.assignee_id || null,
         pipeline_id: firstColumnId,
         status: 'active',
         avatar_color: ['bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500'][Math.floor(Math.random() * 4)]
@@ -864,11 +882,11 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           <div className="flex items-center gap-3">
             {/* Search Input */}
             <div className="relative w-64 hidden md:block">
-              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
+              <span className="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">search</span>
               <input
                 type="text"
                 placeholder="Buscar lead ou informação..."
-                className="w-full h-10 pl-10 pr-4 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-700 dark:text-white transition-all"
+                className="w-full h-10 !pl-12 pr-4 rounded-lg bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-slate-700 dark:text-white transition-all"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -989,7 +1007,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
         </div>
 
         {/* Kanban Board Container with Snap Scroll */}
-        <div className="flex-1 overflow-x-auto overflow-y-auto lg:overflow-y-hidden px-4 md:px-6 pb-6 snap-x snap-mandatory scroll-pl-6">
+        <div className="flex-1 overflow-x-auto overflow-y-auto lg:overflow-y-hidden px-4 md:px-6 pb-6 custom-scrollbar">
           {loading ? (
             <div className="flex h-full items-center justify-center text-gray-500">Carregando pipeline...</div>
           ) : viewMode === 'list' ? (
@@ -1004,10 +1022,15 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           ) : (
             <DndContext
               sensors={sensors}
-              collisionDetection={closestCorners}
+              collisionDetection={pointerWithin}
               onDragStart={handleDragStart}
               onDragOver={handleDragOver}
               onDragEnd={handleDragEnd}
+              measuring={{
+                droppable: {
+                  strategy: MeasuringStrategy.Always,
+                },
+              }}
             >
               <div className="flex h-full gap-6 min-w-max">
                 <SortableContext

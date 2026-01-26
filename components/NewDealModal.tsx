@@ -33,6 +33,7 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
     const [cnpj, setCnpj] = useState('');
     const [contactName, setContactName] = useState('');
     const [phone, setPhone] = useState('');
+    const [phoneSecondary, setPhoneSecondary] = useState('');
     const [email, setEmail] = useState('');
     const [service, setService] = useState(''); // This is now "Parceria" (mapped to tag)
     const [value, setValue] = useState('');
@@ -57,6 +58,7 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
                 setCnpj(initialData.cnpj || '');
                 setContactName(initialData.contact_name || '');
                 setPhone(initialData.phone || '');
+                setPhoneSecondary(initialData.phone_secondary || '');
                 setEmail(initialData.email || '');
                 setService(initialData.tag || '');
                 setValue(initialData.value?.toString() || '');
@@ -108,6 +110,7 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
         setCnpj('');
         setContactName('');
         setPhone('');
+        setPhoneSecondary('');
         setEmail('');
         setService('');
         setValue('');
@@ -197,6 +200,7 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
                 cnpj,
                 contact_name: contactName,
                 phone,
+                phone_secondary: phoneSecondary,
                 email,
                 tag: service, // Storing Partnership in tag
                 title: `${companyName}`,
@@ -342,15 +346,25 @@ export default function NewDealModal({ isOpen, onClose, onSave, initialData, kno
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">E-mail</label>
+                                <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Telefone Secundário</label>
                                 <input
-                                    type="email"
+                                    type="text"
                                     className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all placeholder:text-slate-400"
-                                    placeholder="contato@empresa.com.br"
-                                    value={email}
-                                    onChange={(e) => setEmail(e.target.value)}
+                                    placeholder="(00) 00000-0000"
+                                    value={phoneSecondary}
+                                    onChange={(e) => setPhoneSecondary(e.target.value)}
                                 />
                             </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">E-mail</label>
+                            <input
+                                type="email"
+                                className="w-full h-10 px-3 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm focus:ring-2 focus:ring-primary/50 outline-none transition-all placeholder:text-slate-400"
+                                placeholder="contato@empresa.com.br"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                            />
                         </div>
                     </div>
 

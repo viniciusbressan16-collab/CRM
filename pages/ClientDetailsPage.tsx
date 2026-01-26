@@ -32,80 +32,8 @@ interface ClientDetailsPageProps {
   activePage: View;
 }
 
-// --- Standalone Components (Fixed Focus Bug) ---
-
-const ActionMenu = ({ onEdit, onDelete }: { onEdit?: () => void, onDelete: () => void }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  return (
-    <div className="relative">
-      <button onClick={() => setIsOpen(!isOpen)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors p-1 rounded hover:bg-gray-100 dark:hover:bg-white/5">
-        <span className="material-symbols-outlined text-[18px]">more_horiz</span>
-      </button>
-      {isOpen && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setIsOpen(false)}></div>
-          <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-surface-dark border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-20 py-1">
-            {onEdit && (
-              <button onClick={() => { setIsOpen(false); onEdit(); }} className="w-full text-left px-4 py-2 text-xs font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2">
-                <span className="material-symbols-outlined text-[14px]">edit</span> Editar
-              </button>
-            )}
-            <button onClick={() => { setIsOpen(false); onDelete(); }} className="w-full text-left px-4 py-2 text-xs font-medium text-red-600 hover:bg-gray-50 dark:hover:bg-white/5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[14px]">delete</span> Excluir
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-};
-
-const NoteItem = ({ note, onUpdate, onDelete }: { note: DealNote, onUpdate: (id: string, content: string) => void, onDelete: (id: string) => void }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editContent, setEditContent] = useState(note.content);
-
-  const handleSave = async () => {
-    await onUpdate(note.id, editContent);
-    setIsEditing(false);
-  };
-
-  const formatDate = (dateString: string | null) => {
-    if (!dateString) return '-';
-    return new Date(dateString).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-  };
-
-  if (isEditing) {
-    return (
-      <div className="bg-white/5 px-3 py-2 rounded border border-primary/30">
-        <textarea
-          value={editContent}
-          onChange={(e) => setEditContent(e.target.value)}
-          className="w-full bg-black/20 border border-white/5 rounded p-2 text-xs text-white mb-2 resize-none focus:border-primary/50 outline-none"
-          rows={3}
-        />
-        <div className="flex justify-end gap-2">
-          <button onClick={() => setIsEditing(false)} className="text-xs text-white/50 hover:text-white transition-colors">Cancelar</button>
-          <button onClick={handleSave} className="text-xs bg-primary text-white px-3 py-1 rounded font-bold shadow-[0_0_10px_rgba(212,175,55,0.4)] hover:bg-primary-hover">Salvar</button>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white/5 px-4 py-3 rounded-lg text-xs text-white/70 border border-transparent hover:border-white/10 flex justify-between group transition-all hover:bg-white/10">
-      <div className="flex-1 mr-2">
-        <p className="font-medium text-white mb-1 whitespace-pre-wrap leading-relaxed">{note.content}</p>
-        <p className="text-[10px] text-white/30 font-mono mt-2 flex items-center gap-1">
-          <span className="material-symbols-outlined text-[10px]">schedule</span>
-          {formatDate(note.created_at)}
-        </p>
-      </div>
-      <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-        <ActionMenu onEdit={() => setIsEditing(true)} onDelete={() => onDelete(note.id)} />
-      </div>
-    </div>
-  );
-};
+import ActionMenu from '../components/ActionMenu';
+import NoteItem from '../components/NoteItem';
 
 const EditModal = ({
   editingSection,
@@ -323,7 +251,7 @@ const TaskModal = ({
       is_urgent: urgent || priority === 'alta',
       priority,
       description,
-      due_date: dueDate ? new Date(dueDate).toISOString() : null,
+      due_date: dueDate ? new Date(dueDate + 'T12:00:00').toISOString() : null,
       assignee_ids: assigneeIds,
       assignee_id: assigneeIds[0] || null
     });
@@ -570,8 +498,28 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
   };
 
   const fetchHistory = async () => {
-    const { data, error } = await supabase.from('deal_history').select('*').eq('deal_id', dealId!).order('created_at', { ascending: false });
+    const { data, error } = await supabase
+      .from('deal_history')
+      .select(`
+        *,
+        profile:profiles(name, avatar_url)
+      `)
+      .eq('deal_id', dealId!)
+      .order('created_at', { ascending: false });
+
     if (!error) setHistory(data || []);
+  };
+
+  // --- Handlers ---
+  const addToHistory = async (action: string, description: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    await supabase.from('deal_history').insert({
+      deal_id: deal.id, // Ensure 'deal' is available in scope or use 'dealId'
+      action_type: action,
+      description: description,
+      user_id: user?.id
+    });
+    fetchHistory();
   };
 
   // --- Handlers ---
@@ -582,7 +530,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
       if (error) throw error;
       setNewNote('');
       fetchNotes();
-      fetchHistory();
+      addToHistory('NOTE', 'adicionou uma nota.');
     } catch (error) {
       console.error('Error adding note:', error);
       alert('Erro ao adicionar nota.');
@@ -668,6 +616,32 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
       if (!task.is_completed) setTimeout(fetchHistory, 500);
     } catch (error) {
       console.error('Error toggling task:', error);
+    }
+  };
+
+  const handleToggleUrgent = async (task: DealTask, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    const newUrgency = !task.is_urgent;
+
+    // Optimistic Update
+    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, is_urgent: newUrgency, priority: newUrgency ? 'alta' : 'média' } : t));
+
+    try {
+      const { error } = await supabase
+        .from('deal_tasks')
+        .update({
+          is_urgent: newUrgency,
+          priority: newUrgency ? 'alta' : 'média'
+        })
+        .eq('id', task.id);
+
+      if (error) throw error;
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao atualizar urgência.');
+      // Revert
+      fetchTasks();
     }
   };
 
@@ -899,7 +873,6 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
 
         {/* Main Grid Layout */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-
 
           {/* Left Sidebar (Profile & Stats) */}
           <aside className="lg:col-span-4 xl:col-span-3 flex flex-col gap-6 sticky top-24">
@@ -1249,7 +1222,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                             title: newTaskTitle,
                             is_urgent: newTaskUrgent,
                             priority: newTaskUrgent ? 'alta' : 'média',
-                            due_date: newTaskDueDate ? new Date(newTaskDueDate).toISOString() : null,
+                            due_date: newTaskDueDate ? new Date(newTaskDueDate + 'T12:00:00').toISOString() : null,
                             assignee_ids: newTaskAssigneeIds,
                             assignee_id: newTaskAssigneeIds[0] || null
                           }).then(() => {
@@ -1273,8 +1246,8 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                       if (taskFilter === 'done') return t.is_completed;
                       return true;
                     }).map((task) => (
-                      <label key={task.id} className={`relative flex items-start gap-4 p-4 rounded-lg hover:bg-white/5 transition-all cursor-pointer group/item border border-transparent hover:border-white/5 ${task.is_completed ? 'opacity-40 grayscale' : ''}`}>
-                        <div className="relative pt-0.5">
+                      <div key={task.id} className={`relative flex items-start gap-4 p-4 rounded-lg hover:bg-white/5 transition-all cursor-pointer group/item border border-transparent hover:border-white/5 ${task.is_completed ? 'opacity-40 grayscale' : ''}`}>
+                        <div className="relative pt-0.5" onClick={(e) => e.stopPropagation()}>
                           <input
                             type="checkbox"
                             checked={task.is_completed || false}
@@ -1284,7 +1257,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                           <span className="material-symbols-outlined text-[16px] text-black absolute top-0.5 left-0.5 pointer-events-none opacity-0 peer-checked:opacity-100 transition-opacity">check</span>
                         </div>
 
-                        <div className="flex-1">
+                        <div className="flex-1" onClick={() => handleOpenEditTask(task)}>
                           <span className={`text-sm font-medium text-white group-hover/item:text-primary transition-colors block ${task.is_completed ? 'line-through' : ''}`}>{task.title}</span>
                           <div className="flex items-center gap-2 mt-1.5">
                             <span className={`text-[10px] px-1.5 py-0.5 rounded border ${(task as any).priority === 'alta' || task.is_urgent ? 'text-red-400 border-red-500/30 bg-red-500/10' :
@@ -1311,10 +1284,23 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                             })}
                           </div>
                         </div>
-                        <div className="opacity-0 group-hover/item:opacity-100 transition-opacity absolute top-4 right-4" onClick={(e) => e.preventDefault()}>
-                          <ActionMenu onEdit={() => handleOpenEditTask(task)} onDelete={() => handleDeleteTask(task.id)} />
+
+                        <div className="flex items-center gap-2 absolute top-4 right-4 opacity-0 group-hover/item:opacity-100 transition-opacity">
+                          <button
+                            onClick={(e) => handleToggleUrgent(task, e)}
+                            title={task.is_urgent ? "Remover Urgência" : "Marcar como Urgente"}
+                            className={`size-8 rounded-full flex items-center justify-center transition-all ${task.is_urgent
+                              ? 'bg-red-500/20 text-red-500 hover:bg-red-500/30'
+                              : 'bg-white/5 text-white/20 hover:text-white/60 hover:bg-white/10'
+                              }`}
+                          >
+                            <span className={`material-symbols-outlined text-[18px] ${task.is_urgent ? 'animate-pulse' : ''}`}>local_fire_department</span>
+                          </button>
+                          <div onClick={(e) => e.preventDefault()}>
+                            <ActionMenu onEdit={() => handleOpenEditTask(task)} onDelete={() => handleDeleteTask(task.id)} />
+                          </div>
                         </div>
-                      </label>
+                      </div>
                     ))}
                     {tasks.length === 0 && <p className="p-8 text-sm text-center text-white/20 italic flex flex-col items-center gap-2">
                       <span className="material-symbols-outlined text-4xl opacity-50">task_alt</span>
@@ -1380,9 +1366,13 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
               </div>
             </div>
 
+
           </main>
         </div>
       </div>
+
+
+
     </Layout>
   );
 }

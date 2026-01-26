@@ -7,6 +7,7 @@ import AddProjectTaskModal from '../components/AddProjectTaskModal';
 import AddProjectDocumentModal from '../components/AddProjectDocumentModal';
 import AddProjectMemberModal from '../components/AddProjectMemberModal';
 import Header from '../components/Header';
+import NoteItem from '../components/NoteItem';
 
 interface ProjectDetailsPageProps {
     onNavigate: (view: View, id?: string) => void;
@@ -24,6 +25,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
     const [activeTab, setActiveTab] = useState<'overview' | 'tasks' | 'documents'>('overview');
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [taskFilter, setTaskFilter] = useState<'all' | 'pending' | 'done'>('pending');
+    const [newNote, setNewNote] = useState('');
 
     const logActivity = async (action: string, description: string) => {
         const { data: { user } } = await supabase.auth.getUser();
@@ -139,6 +141,7 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
              profile:profiles(id, name, avatar_url)
           ),
           tasks:project_tasks(*),
+          notes:project_notes(*),
           documents:project_documents(*),
           history:project_history(
             *,
@@ -174,6 +177,69 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
         } catch (error) {
             console.error('Error removing member:', error);
             alert('Erro ao remover membro');
+        }
+    };
+
+    const handleAddNote = async () => {
+        if (!newNote.trim()) return;
+        try {
+            const { data, error } = await supabase
+                .from('project_notes')
+                .insert({ project_id: projectId, content: newNote })
+                .select()
+                .single();
+
+            if (error) throw error;
+
+            setProject((prev: any) => ({
+                ...prev,
+                notes: [data, ...(prev.notes || [])]
+            }));
+            setNewNote('');
+            logActivity('ADD_NOTE', 'adicionou uma nota ao projeto.');
+        } catch (error) {
+            console.error('Error adding note:', error);
+            alert('Erro ao adicionar nota.');
+        }
+    };
+
+    const handleUpdateNote = async (id: string, content: string) => {
+        try {
+            const { error } = await supabase
+                .from('project_notes')
+                .update({ content })
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setProject((prev: any) => ({
+                ...prev,
+                notes: prev.notes.map((n: any) => n.id === id ? { ...n, content } : n)
+            }));
+        } catch (error) {
+            console.error('Error updating note:', error);
+            alert('Erro ao atualizar nota.');
+        }
+    };
+
+    const handleDeleteNote = async (id: string) => {
+        if (!confirm('Tem certeza que deseja excluir esta nota?')) return;
+        try {
+            const { error } = await supabase
+                .from('project_notes')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+
+            setProject((prev: any) => ({
+                ...prev,
+                notes: prev.notes.filter((n: any) => n.id !== id)
+            }));
+            logActivity('DELETE_NOTE', 'excluiu uma nota do projeto.');
+        } catch (error) {
+            console.error('Error deleting note:', error);
+            alert('Erro ao excluir nota.');
         }
     };
 
@@ -367,6 +433,51 @@ export default function ProjectDetailsPage({ onNavigate, activePage, projectId }
                                             </div>
                                         </div>
                                     ))}
+                                </div>
+                            </div>
+
+                            {/* Notes Section */}
+                            <div className="glass-card-premium p-6">
+                                {/* Specular Highlight */}
+                                <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-50"></div>
+
+                                <div className="flex items-center gap-3 mb-6">
+                                    <div className="p-2 rounded-lg bg-amber-500/10 border border-amber-500/20">
+                                        <span className="material-symbols-outlined text-amber-400 text-xl">sticky_note_2</span>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-white tracking-tight">Notas</h3>
+                                </div>
+
+                                <div className="space-y-4">
+                                    <div className="relative">
+                                        <textarea
+                                            value={newNote}
+                                            onChange={(e) => setNewNote(e.target.value)}
+                                            placeholder="Adicionar uma nota..."
+                                            className="w-full bg-white/5 border border-white/10 rounded-xl p-4 pr-12 text-sm text-white placeholder:text-white/20 focus:border-primary/50 focus:ring-1 focus:ring-primary/50 outline-none transition-all resize-none h-24"
+                                        />
+                                        <button
+                                            onClick={handleAddNote}
+                                            disabled={!newNote.trim()}
+                                            className="absolute bottom-3 right-3 p-2 bg-primary text-white rounded-lg hover:bg-primary-hover disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-lg shadow-primary/20"
+                                        >
+                                            <span className="material-symbols-outlined text-[20px]">send</span>
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-3">
+                                        {project.notes?.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).map((note: any) => (
+                                            <NoteItem
+                                                key={note.id}
+                                                note={note}
+                                                onUpdate={handleUpdateNote}
+                                                onDelete={handleDeleteNote}
+                                            />
+                                        ))}
+                                        {(!project.notes || project.notes.length === 0) && (
+                                            <p className="text-center text-xs text-white/30 italic py-4">Nenhuma nota adicionada.</p>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

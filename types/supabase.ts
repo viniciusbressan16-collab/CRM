@@ -100,6 +100,7 @@ export type Database = {
                     deal_id: string
                     description: string
                     id: string
+                    user_id: string | null
                 }
                 Insert: {
                     action_type: string
@@ -107,6 +108,7 @@ export type Database = {
                     deal_id: string
                     description: string
                     id?: string
+                    user_id?: string | null
                 }
                 Update: {
                     action_type?: string
@@ -114,6 +116,7 @@ export type Database = {
                     deal_id?: string
                     description?: string
                     id?: string
+                    user_id?: string | null
                 }
                 Relationships: [
                     {
@@ -121,6 +124,13 @@ export type Database = {
                         columns: ["deal_id"]
                         isOneToOne: false
                         referencedRelation: "deals"
+                        referencedColumns: ["id"]
+                    },
+                    {
+                        foreignKeyName: "deal_history_user_id_fkey"
+                        columns: ["user_id"]
+                        isOneToOne: false
+                        referencedRelation: "profiles"
                         referencedColumns: ["id"]
                     },
                 ]
@@ -150,6 +160,35 @@ export type Database = {
                         columns: ["deal_id"]
                         isOneToOne: false
                         referencedRelation: "deals"
+                        referencedColumns: ["id"]
+                    },
+                ]
+            }
+            project_notes: {
+                Row: {
+                    content: string
+                    created_at: string | null
+                    project_id: string
+                    id: string
+                }
+                Insert: {
+                    content: string
+                    created_at?: string | null
+                    project_id: string
+                    id?: string
+                }
+                Update: {
+                    content?: string
+                    created_at?: string | null
+                    project_id?: string
+                    id?: string
+                }
+                Relationships: [
+                    {
+                        foreignKeyName: "project_notes_project_id_fkey"
+                        columns: ["project_id"]
+                        isOneToOne: false
+                        referencedRelation: "internal_projects"
                         referencedColumns: ["id"]
                     },
                 ]
@@ -224,6 +263,7 @@ export type Database = {
                     email: string | null
                     id: string
                     phone: string | null
+                    phone_secondary: string | null
                     pipeline_id: string | null
                     progress: number | null
                     recovered_value: number | null
@@ -245,6 +285,7 @@ export type Database = {
                     email?: string | null
                     id?: string
                     phone?: string | null
+                    phone_secondary?: string | null
                     pipeline_id?: string | null
                     progress?: number | null
                     recovered_value?: number | null
@@ -266,6 +307,7 @@ export type Database = {
                     email?: string | null
                     id?: string
                     phone?: string | null
+                    phone_secondary?: string | null
                     pipeline_id?: string | null
                     progress?: number | null
                     recovered_value?: number | null
@@ -426,6 +468,7 @@ export type Database = {
                 Row: {
                     avatar_url: string | null
                     created_at: string | null
+                    email: string | null
                     id: string
                     name: string | null
                     role: string | null
@@ -434,6 +477,7 @@ export type Database = {
                 Insert: {
                     avatar_url?: string | null
                     created_at?: string | null
+                    email?: string | null
                     id: string
                     name?: string | null
                     role?: string | null
@@ -442,6 +486,7 @@ export type Database = {
                 Update: {
                     avatar_url?: string | null
                     created_at?: string | null
+                    email?: string | null
                     id?: string
                     name?: string | null
                     role?: string | null
