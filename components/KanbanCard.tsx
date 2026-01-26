@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function KanbanCard({ tag, tagColor, title, value, avatar, avatarColor, time, highlight, progress, status, alert, onClick, onEdit, onDelete, assigneeName }: any) {
+export default function KanbanCard({ tag, tagColor, title, value, avatar, avatarColor, time, highlight, progress, status, alert, onClick, onEdit, onDelete, assigneeName, showDetails, cnpj, contactName, email, phone }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -147,6 +147,35 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
             )}
           </div>
         </div>
+        {/* Detailed View Information */}
+        {showDetails && (
+          <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/5 text-[11px] text-text-secondary-light dark:text-gray-400 space-y-1.5">
+            {contactName && (
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">person</span>
+                <span className="truncate">{contactName}</span>
+              </div>
+            )}
+            {cnpj && (
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">badge</span>
+                <span className="truncate">{cnpj}</span>
+              </div>
+            )}
+            {email && (
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">mail</span>
+                <span className="truncate">{email}</span>
+              </div>
+            )}
+            {phone && (
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">call</span>
+                <span className="truncate">{phone}</span>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -61,7 +61,7 @@ interface PipelineStats {
 
 // --- Helper Components ---
 
-const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void }) => {
+const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask, showDetails }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void, showDetails: boolean }) => {
   const {
     attributes,
     listeners,
@@ -92,6 +92,11 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
         onEdit={onEdit}
         onDelete={onDelete}
         onClick={() => onNavigate('client', deal.id)}
+        showDetails={showDetails}
+        cnpj={deal.cnpj}
+        contactName={deal.contact_name}
+        email={deal.email}
+        phone={deal.phone}
       />
     </div>
   );
@@ -100,10 +105,12 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
     prev.deal.pipeline_id === next.deal.pipeline_id &&
     prev.deal.progress === next.deal.progress &&
     (prev.deal as any).nextTask === (next.deal as any).nextTask &&
-    prev.deal.value === next.deal.value;
+    prev.deal.value === next.deal.value &&
+    prev.deal.updated_at === next.deal.updated_at &&
+    prev.showDetails === next.showDetails;
 });
 
-function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask }: any) {
+function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask, showDetails }: any) {
   // Sortable hook for the COLUMN itself
   const {
     attributes,
@@ -213,6 +220,7 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
                   onDelete={() => handleDeleteDeal(deal.id)}
                   onNavigate={onNavigate}
                   onCompleteTask={onCompleteTask}
+                  showDetails={showDetails}
                 />
               ))
             )}
@@ -247,6 +255,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   // const [stats, setStats] = useState<PipelineStats>({ ... }); // Removed specific state for dynamic calculation
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [showDetails, setShowDetails] = useState(false);
 
   // Modal States
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -925,6 +934,15 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
               <span className="hidden sm:inline">Importar</span>
             </button>
 
+            {/* Toggle Details */}
+            <button
+              onClick={() => setShowDetails(!showDetails)}
+              className={`p-2 rounded-lg transition-all border border-gray-200 dark:border-gray-700 ${showDetails ? 'bg-primary/10 text-primary border-primary/30' : 'bg-surface-light dark:bg-surface-dark text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'}`}
+              title={showDetails ? "Ocultar Detalhes" : "Mostrar Detalhes"}
+            >
+              <span className="material-symbols-outlined text-[20px]">list_alt</span>
+            </button>
+
             {/* View Mode Toggle */}
             <div className="bg-gray-100 dark:bg-surface-dark rounded-lg p-1 flex items-center mr-2 border border-gray-200 dark:border-gray-700">
               <button
@@ -1051,6 +1069,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                       onNavigate={onNavigate}
                       canManageColumns={canManageColumns}
                       onCompleteTask={handleCompleteTask}
+                      showDetails={showDetails}
                     />
                   ))}
                 </SortableContext>

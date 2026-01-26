@@ -938,6 +938,8 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                     <span className="material-symbols-outlined text-text-secondary-light text-[20px] mt-0.5">call</span>
                     <a className="text-sm text-text-main-light dark:text-white hover:text-primary" href={`tel:${deal.phone}`}>{deal.phone || '-'}</a>
                   </div>
+
+
                 </div>
                 {deal.assignee && (
                   <div className="pt-4 border-t border-border-light dark:border-border-dark relative group/section">
@@ -958,6 +960,25 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                       <span className="text-sm font-medium text-text-main-light dark:text-white">{deal.assignee.name}</span>
                     </div>
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Additional Info Card - Custom Fields - Stagger 2.5 */}
+            <div className="animate-fade-in-up delay-250 glass-card-premium rounded-xl border border-white/5 p-6 shadow-xl relative group/card">
+              <div className="flex justify-between items-center mb-4">
+                <label className="text-[10px] font-bold text-primary/80 uppercase tracking-widest">Informações Adicionais</label>
+              </div>
+              <div className="space-y-3">
+                {deal.custom_fields && typeof deal.custom_fields === 'object' && Object.keys(deal.custom_fields).length > 0 ? (
+                  Object.entries(deal.custom_fields).map(([key, value]) => (
+                    <div key={key} className="p-3 rounded-lg bg-white/5 border border-white/10 flex justify-between items-center">
+                      <p className="text-xs font-bold text-white/50 uppercase">{key}:</p>
+                      <p className="text-sm font-bold text-white">{String(value)}</p>
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs text-white/30 italic">Sem informações adicionais</p>
                 )}
               </div>
             </div>

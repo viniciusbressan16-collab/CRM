@@ -41,6 +41,9 @@ const DEFAULT_COLUMNS: ColumnConfig[] = [
     { key: 'contact_name', label: 'Contato', visible: false },
     { key: 'email', label: 'Email', visible: false },
     { key: 'phone', label: 'Telefone', visible: false },
+    { key: 'phone_secondary', label: 'Telefone Secundário', visible: false },
+    { key: 'cnpj', label: 'CNPJ', visible: false },
+    { key: 'assignee', label: 'Responsável', visible: false },
     { key: 'created_at', label: 'Criado em', visible: false },
 ];
 
@@ -48,6 +51,41 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
     const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
     const [selectedDealIds, setSelectedDealIds] = useState<Set<string>>(new Set());
     const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
+
+    // Sync DEFAULT_COLUMNS with state (handles code updates) & Load from LocalStorage
+    useEffect(() => {
+        const savedConfig = localStorage.getItem('pipeline_list_columns');
+        let initialConfig = DEFAULT_COLUMNS;
+
+        if (savedConfig) {
+            try {
+                const parsed = JSON.parse(savedConfig);
+                // Merge saved config with defaults to ensure new columns appear
+                const savedKeys = new Set(parsed.map((c: ColumnConfig) => c.key));
+                const missingDefaults = DEFAULT_COLUMNS.filter(c => !savedKeys.has(c.key));
+
+                // Preserve saved visibility preference, but add new columns
+                initialConfig = [...parsed, ...missingDefaults];
+            } catch (e) {
+                console.error('Failed to parse saved columns', e);
+            }
+        }
+
+        setColumnConfig(prev => {
+            // If state has already diverged (e.g. custom fields added), merging logic is complex.
+            // For simplicity on mount, we trust localStorage + defaults.
+            // But we must also respect checking against current state if it was somehow initialized differently?
+            // Actually, this runs on mount. 'prev' is initial DEFAULT_COLUMNS.
+            return initialConfig;
+        });
+    }, []);
+
+    // Save to LocalStorage on change
+    useEffect(() => {
+        if (columnConfig !== DEFAULT_COLUMNS) {
+            localStorage.setItem('pipeline_list_columns', JSON.stringify(columnConfig));
+        }
+    }, [columnConfig]);
 
     // Dynamic Column Synchronization: Update config when deals change to include new custom fields
     useEffect(() => {
@@ -324,6 +362,20 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                                 {col.key === 'contact_name' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.contact_name || '-'}</span>}
                                                 {col.key === 'email' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.email || '-'}</span>}
                                                 {col.key === 'phone' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.phone || '-'}</span>}
+                                                {col.key === 'phone_secondary' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.phone_secondary || '-'}</span>}
+                                                {col.key === 'cnpj' && <span className="text-sm text-gray-600 dark:text-gray-400">{deal.cnpj || '-'}</span>}
+                                                {col.key === 'assignee' && (
+                                                    <div className="flex items-center gap-2">
+                                                        {deal.assignee?.avatar_url ? (
+                                                            <div className="w-5 h-5 rounded-full bg-cover" style={{ backgroundImage: `url('${deal.assignee.avatar_url}')` }}></div>
+                                                        ) : (
+                                                            <div className="w-5 h-5 rounded-full bg-gray-200 flex items-center justify-center text-[9px] font-bold">
+                                                                {(deal.assignee?.name || '?').charAt(0).toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <span className="text-sm text-gray-600 dark:text-gray-400 truncate max-w-[120px]">{deal.assignee?.name || '-'}</span>
+                                                    </div>
+                                                )}
                                                 {col.key === 'created_at' && <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(deal.created_at)}</span>}
 
                                                 {/* Dynamic Custom Field Rendering */}
