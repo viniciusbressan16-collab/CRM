@@ -202,6 +202,30 @@ const EditModal = ({
   );
 };
 
+// --- Copy Helper ---
+const CopyButton = ({ text, className = "" }: { text: string, className?: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`opacity-50 hover:opacity-100 transition-opacity p-1.5 hover:bg-white/10 rounded-md ${className}`}
+      title="Copiar"
+    >
+      <span className="material-symbols-outlined text-[16px] text-white">
+        {copied ? 'check' : 'content_copy'}
+      </span>
+    </button>
+  );
+};
+
 const TaskModal = ({
   isOpen,
   onClose,
@@ -919,24 +943,31 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                       <ActionMenu onEdit={() => handleOpenEdit('contact')} onDelete={() => { }} />
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 mb-1">
+                  <div className="flex items-center gap-3 mb-1 group relative">
                     {/* Placeholder Avatar */}
                     <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">
                       {deal.contact_name ? deal.contact_name.charAt(0).toUpperCase() : 'C'}
                     </div>
-                    <div>
-                      <p className="text-sm font-bold text-text-main-light dark:text-white">{deal.contact_name || 'Não informado'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-text-main-light dark:text-white select-text">{deal.contact_name || 'Não informado'}</p>
+                      {deal.contact_name && <CopyButton text={deal.contact_name} />}
                     </div>
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 group relative">
                     <span className="material-symbols-outlined text-text-secondary-light text-[20px] mt-0.5">mail</span>
-                    <a className="text-sm text-text-main-light dark:text-white hover:text-primary break-all" href={`mailto:${deal.email}`}>{deal.email || '-'}</a>
+                    <div className="flex items-center gap-2 overflow-hidden">
+                      <a className="text-sm text-text-main-light dark:text-white hover:text-primary break-all select-text" href={`mailto:${deal.email}`}>{deal.email || '-'}</a>
+                      {deal.email && <CopyButton text={deal.email} />}
+                    </div>
                   </div>
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 group relative">
                     <span className="material-symbols-outlined text-text-secondary-light text-[20px] mt-0.5">call</span>
-                    <a className="text-sm text-text-main-light dark:text-white hover:text-primary" href={`tel:${deal.phone}`}>{deal.phone || '-'}</a>
+                    <div className="flex items-center gap-2">
+                      <a className="text-sm text-text-main-light dark:text-white hover:text-primary select-text" href={`tel:${deal.phone}`}>{deal.phone || '-'}</a>
+                      {deal.phone && <CopyButton text={deal.phone} />}
+                    </div>
                   </div>
 
 
@@ -957,7 +988,7 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
                           {deal.assignee.name ? deal.assignee.name.charAt(0).toUpperCase() : '?'}
                         </div>
                       )}
-                      <span className="text-sm font-medium text-text-main-light dark:text-white">{deal.assignee.name}</span>
+                      <span className="text-sm font-medium text-text-main-light dark:text-white select-text">{deal.assignee.name}</span>
                     </div>
                   </div>
                 )}
@@ -972,9 +1003,12 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
               <div className="space-y-3">
                 {deal.custom_fields && typeof deal.custom_fields === 'object' && Object.keys(deal.custom_fields).length > 0 ? (
                   Object.entries(deal.custom_fields).map(([key, value]) => (
-                    <div key={key} className="p-3 rounded-lg bg-white/5 border border-white/10 flex justify-between items-center">
+                    <div key={key} className="p-3 rounded-lg bg-white/5 border border-white/10 flex justify-between items-center group relative">
                       <p className="text-xs font-bold text-white/50 uppercase">{key}:</p>
-                      <p className="text-sm font-bold text-white">{String(value)}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-bold text-white select-text">{String(value)}</p>
+                        <CopyButton text={String(value)} />
+                      </div>
                     </div>
                   ))
                 ) : (
@@ -991,12 +1025,18 @@ export default function ClientDetailsPage({ onNavigate, dealId, activePage }: Cl
               <div className="space-y-3">
                 {deal.associated_companies && Array.isArray(deal.associated_companies) && (deal.associated_companies as unknown as AssociatedCompany[]).length > 0 ? (
                   (deal.associated_companies as unknown as AssociatedCompany[]).map((company, idx) => (
-                    <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/10">
-                      <p className="text-sm font-bold text-white mb-1">{company.name}</p>
-                      <p className="text-[10px] text-white/40 font-mono flex items-center gap-1">
-                        <span className="material-symbols-outlined text-[10px]">corporate_fare</span>
-                        {company.cnpj || 'CNPJ não informado'}
-                      </p>
+                    <div key={idx} className="p-3 rounded-lg bg-white/5 border border-white/10 group relative">
+                      <div className="flex items-center justify-between">
+                        <p className="text-sm font-bold text-white mb-1 select-text">{company.name}</p>
+                        <CopyButton text={company.name} />
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-white/40 font-mono flex items-center gap-1 select-text">
+                          <span className="material-symbols-outlined text-[10px]">corporate_fare</span>
+                          {company.cnpj || 'CNPJ não informado'}
+                        </p>
+                        {company.cnpj && <CopyButton text={company.cnpj} />}
+                      </div>
                     </div>
                   ))
                 ) : (

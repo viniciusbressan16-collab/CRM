@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 
-export default function KanbanCard({ tag, tagColor, title, value, avatar, avatarColor, time, highlight, progress, status, alert, onClick, onEdit, onDelete, assigneeName, showDetails, cnpj, contactName, email, phone }: any) {
+export default function KanbanCard({ tag, tagColor, title, value, avatar, avatarColor, time, highlight, progress, status, alert, onClick, onEdit, onDelete, assigneeName, showDetails, cnpj, contactName, email, phone, phoneSecondary }: any) {
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -151,27 +151,38 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
         {showDetails && (
           <div className="mt-4 pt-3 border-t border-gray-100 dark:border-white/5 text-[11px] text-text-secondary-light dark:text-gray-400 space-y-1.5">
             {contactName && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 group/row relative">
                 <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">person</span>
-                <span className="truncate">{contactName}</span>
+                <span className="truncate select-text cursor-text" onClick={e => e.stopPropagation()}>{contactName}</span>
+                <CopyButton text={contactName} />
               </div>
             )}
             {cnpj && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 group/row relative">
                 <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">badge</span>
-                <span className="truncate">{cnpj}</span>
+                <span className="truncate select-text cursor-text" onClick={e => e.stopPropagation()}>{cnpj}</span>
+                <CopyButton text={cnpj} />
               </div>
             )}
             {email && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 group/row relative">
                 <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">mail</span>
-                <span className="truncate">{email}</span>
+                <span className="truncate select-text cursor-text" onClick={e => e.stopPropagation()}>{email}</span>
+                <CopyButton text={email} />
               </div>
             )}
             {phone && (
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 group/row relative">
                 <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">call</span>
-                <span className="truncate">{phone}</span>
+                <span className="truncate select-text cursor-text" onClick={e => e.stopPropagation()}>{phone}</span>
+                <CopyButton text={phone} />
+              </div>
+            )}
+            {phoneSecondary && (
+              <div className="flex items-center gap-2 group/row relative">
+                <span className="material-symbols-outlined text-[14px] shrink-0 opacity-70">phone_iphone</span>
+                <span className="truncate select-text cursor-text" onClick={e => e.stopPropagation()}>{phoneSecondary}</span>
+                <CopyButton text={phoneSecondary} />
               </div>
             )}
           </div>
@@ -180,3 +191,27 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
     </div>
   )
 }
+
+// --- Copy Helper ---
+const CopyButton = ({ text, className = "" }: { text: string, className?: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <button
+      onClick={handleCopy}
+      className={`opacity-0 group-hover/row:opacity-100 transition-opacity p-0.5 hover:bg-white/10 rounded ml-1 ${className}`}
+      title="Copiar"
+    >
+      <span className="material-symbols-outlined text-[12px] text-text-secondary-light dark:text-gray-400 hover:text-primary">
+        {copied ? 'check' : 'content_copy'}
+      </span>
+    </button>
+  );
+};

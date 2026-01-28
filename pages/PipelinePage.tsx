@@ -97,6 +97,7 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
         contactName={deal.contact_name}
         email={deal.email}
         phone={deal.phone}
+        phoneSecondary={(deal as any).phone_secondary}
       />
     </div>
   );
@@ -1108,6 +1109,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                       onEdit={() => { }}
                       onDelete={() => { }}
                       onClick={() => { }}
+                      phoneSecondary={(activeDeal as any).phone_secondary}
                     />
                   </div>
                 ) : null}
