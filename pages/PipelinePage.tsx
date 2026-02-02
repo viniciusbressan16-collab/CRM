@@ -641,11 +641,11 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   };
 
   const handleSaveDeal = async (dealData: Partial<Deal>) => {
-
     try {
       let savedDeal: DealWithAssignee | null = null;
-      if (selectedDeal) {
-        // Update existing
+
+      // Check if we are UPDATING an existing deal (must have a valid ID)
+      if (selectedDeal?.id) {
         const { data, error } = await supabase
           .from('deals')
           .update(dealData)
@@ -658,11 +658,30 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
         // Optimistic Update
         setDeals(prev => prev.map(d => d.id === savedDeal!.id ? savedDeal! : d));
+
       } else {
-        // Create new
+        // CREATING a new deal
+        const payload = { ...dealData };
+
+        // 1. Ensure ID is present (DB missing default)
+        if (!payload.id) {
+          payload.id = crypto.randomUUID();
+        }
+
+        // 2. Ensure pipeline_id is present
+        if (!payload.pipeline_id) {
+          // Sort columns to find the first one
+          const sortedColumns = [...(columns || [])].sort((a, b) => a.order_index - b.order_index);
+          if (sortedColumns.length > 0) {
+            payload.pipeline_id = sortedColumns[0].id;
+          } else {
+            throw new Error("Não há fases cadastradas no Pipeline. Crie uma fase antes de adicionar leads.");
+          }
+        }
+
         const { data, error } = await supabase
           .from('deals')
-          .insert([dealData] as any)
+          .insert([payload] as any)
           .select(`*, assignee:profiles(name, avatar_url)`)
           .single();
 
@@ -674,9 +693,9 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       }
       setIsModalOpen(false);
       fetchPipelineData(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving deal:', error);
-      alert('Erro ao salvar oportunidade.');
+      alert(`Erro ao salvar oportunidade: ${error.message || JSON.stringify(error)}`);
     }
   };
 
