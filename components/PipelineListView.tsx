@@ -18,6 +18,7 @@ interface PipelineListViewProps {
     onNavigate: (view: View, id?: string) => void;
     onEdit: (deal: Deal) => void;
     onBatchUpdate: (dealIds: string[], updates: Partial<Deal>) => Promise<void>;
+    onBulkDelete?: (dealIds: string[]) => void;
     getTagColor: (tag: string) => string;
 }
 
@@ -151,7 +152,7 @@ const EditableCurrencyCell = ({ numericValue, onSaveNumeric, className }: Editab
     );
 };
 
-export default function PipelineListView({ deals, columns, onNavigate, onEdit, onBatchUpdate, getTagColor }: PipelineListViewProps) {
+export default function PipelineListView({ deals, columns, onNavigate, onEdit, onBatchUpdate, onBulkDelete, getTagColor }: PipelineListViewProps) {
     // Initialize Config with Saved Order + Merging Logic
     const [columnConfig, setColumnConfig] = useState<ColumnConfig[]>(() => {
         const savedConfig = localStorage.getItem('pipeline_list_columns');
@@ -322,10 +323,10 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
 
     // --- Bulk Selection ---
     const toggleSelectAll = () => {
-        if (selectedDealIds.size === deals.length) {
+        if (selectedDealIds.size === processedDeals.length && processedDeals.length > 0) {
             setSelectedDealIds(new Set());
         } else {
-            setSelectedDealIds(new Set(deals.map(d => d.id)));
+            setSelectedDealIds(new Set(processedDeals.map(d => d.id)));
         }
     };
 
@@ -564,7 +565,7 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                             <th className="px-4 py-4 w-[40px] text-center">
                                 <input
                                     type="checkbox"
-                                    checked={deals.length > 0 && selectedDealIds.size === deals.length}
+                                    checked={processedDeals.length > 0 && selectedDealIds.size === processedDeals.length}
                                     onChange={toggleSelectAll}
                                     className="rounded border-gray-300 text-primary focus:ring-primary"
                                 />
@@ -604,8 +605,39 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                 </div>
                             </th>
                         </tr>
-                        {/* Filter Row */}
-                        {showFilters && (
+                        {/* Bulk Action Bar - Replaces Filter Row if selection exists */}
+                        {selectedDealIds.size > 0 ? (
+                            <tr className="bg-primary/10 border-b border-primary/20">
+                                <th className="px-4 py-3 text-center">
+                                    <div className="w-4 h-4 rounded bg-primary text-white flex items-center justify-center text-[10px] cursor-pointer" onClick={toggleSelectAll}>
+                                        <span className="material-symbols-outlined text-[14px]">remove</span>
+                                    </div>
+                                </th>
+                                <th colSpan={visibleColumns.length + 2} className="px-6 py-2">
+                                    <div className="flex items-center justify-between w-full">
+                                        <div className="flex items-center gap-4">
+                                            <span className="text-sm font-bold text-primary">{selectedDealIds.size} selecionados</span>
+                                            <div className="h-4 w-px bg-primary/20"></div>
+                                            {/* Bulk Edit Options could go here */}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            {onBulkDelete && (
+                                                <button
+                                                    onClick={() => {
+                                                        onBulkDelete(Array.from(selectedDealIds));
+                                                        setSelectedDealIds(new Set()); // Clear selection after action
+                                                    }}
+                                                    className="px-3 py-1.5 bg-white dark:bg-black/20 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-md text-xs font-medium border border-red-200 dark:border-red-900/20 flex items-center gap-2 transition-colors"
+                                                >
+                                                    <span className="material-symbols-outlined text-[16px]">delete</span>
+                                                    Excluir Selecionados
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </th>
+                            </tr>
+                        ) : showFilters && (
                             <tr className="bg-gray-50/50 dark:bg-black/10 border-b border-gray-100 dark:border-gray-800">
                                 <th className="px-4 py-2"></th>
                                 {visibleColumns.map(col => (
@@ -680,7 +712,7 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                     <tr
                                         key={deal.id}
                                         className={`
-                                            border-b border-gray-100 dark:border-gray-800 transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5
+                                            border-b border-gray-100 dark:border-gray-800 transition-colors cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 group
                                             ${isSelected ? 'bg-primary/5 dark:bg-primary/10' : ''}
                                         `}
                                         onClick={() => onNavigate('client', deal.id)}
@@ -689,7 +721,7 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                             <input
                                                 type="checkbox"
                                                 checked={isSelected}
-                                                onChange={() => toggleSelectOne(deal.id)}
+                                                onChange={() => toggleSelectRow(deal.id)}
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="rounded border-gray-300 text-primary focus:ring-primary"
                                             />
@@ -740,6 +772,7 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                                         value=""
                                                         numericValue={deal.value}
                                                         onSaveNumeric={(val) => handleFieldChange(deal.id, 'value', val)}
+                                                        onSave={() => { }}
                                                         className="font-bold text-gray-700 dark:text-gray-300"
                                                     />
                                                 )}
@@ -749,6 +782,7 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                                         value=""
                                                         numericValue={deal.recovered_value}
                                                         onSaveNumeric={(val) => handleFieldChange(deal.id, 'recovered_value', val)}
+                                                        onSave={() => { }}
                                                         className="font-bold text-green-600 dark:text-green-400"
                                                     />
                                                 )}
@@ -847,13 +881,27 @@ export default function PipelineListView({ deals, columns, onNavigate, onEdit, o
                                         }
 
                                         <td className="px-6 py-4 text-right">
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onEdit(deal); }}
-                                                className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors opacity-0 group-hover:opacity-100"
-                                                title="Editar Lead"
-                                            >
-                                                <span className="material-symbols-outlined text-[18px]">edit</span>
-                                            </button>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button
+                                                    onClick={(e) => { e.stopPropagation(); onEdit(deal); }}
+                                                    className="p-1.5 text-gray-400 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                                                    title="Editar Lead"
+                                                >
+                                                    <span className="material-symbols-outlined text-[18px]">edit</span>
+                                                </button>
+                                                {onBulkDelete && (
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onBulkDelete([deal.id]);
+                                                        }}
+                                                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 rounded-lg transition-colors"
+                                                        title="Excluir"
+                                                    >
+                                                        <span className="material-symbols-outlined text-[18px]">delete</span>
+                                                    </button>
+                                                )}
+                                            </div>
                                         </td>
                                     </tr >
                                 );

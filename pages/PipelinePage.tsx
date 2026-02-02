@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import PipelineSkeleton from '../components/PipelineSkeleton';
 import Header from '../components/Header';
 import Layout from '../components/Layout';
 import KanbanCard from '../components/KanbanCard';
@@ -111,7 +113,7 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
     prev.showDetails === next.showDetails;
 });
 
-function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask, showDetails }: any) {
+const PipelineColumn = React.memo(({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask, showDetails }: any) => {
   // Sortable hook for the COLUMN itself
   const {
     attributes,
@@ -213,16 +215,17 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
               />
             ) : (
               deals.map((deal: any) => (
-                <SortableDealCard
-                  key={deal.id}
-                  deal={deal}
-                  getTagColor={getTagColor}
-                  onEdit={() => handleOpenModal(deal)}
-                  onDelete={() => handleDeleteDeal(deal.id)}
-                  onNavigate={onNavigate}
-                  onCompleteTask={onCompleteTask}
-                  showDetails={showDetails}
-                />
+                <div key={deal.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '160px' }}>
+                  <SortableDealCard
+                    deal={deal}
+                    getTagColor={getTagColor}
+                    onEdit={() => handleOpenModal(deal)}
+                    onDelete={() => handleDeleteDeal(deal.id)}
+                    onNavigate={onNavigate}
+                    onCompleteTask={onCompleteTask}
+                    showDetails={showDetails}
+                  />
+                </div>
               ))
             )}
             <button
@@ -237,7 +240,16 @@ function PipelineColumn({ column, deals, calculateTotal, getTagColor, handleOpen
       </div>
     </div>
   );
-}
+}, (prev, next) => {
+  if (prev.deals.length !== next.deals.length) return false;
+  if (prev.column.id !== next.column.id) return false;
+  // Deep compare deals might be expensive, but shallow check on deals array reference is what we rely on usually.
+  // We can just rely on reference equality if parent (ProcessDeals) creates new arrays properly.
+  // Given previous code: setDeals(processed) creates a new array every time.
+  // So react.memo might not help unless we are careful.
+  // But let's keep it to prevent external prop changes from triggering re-renders if deals didn't change (e.g. viewMode change).
+  return prev.deals === next.deals && prev.calculateTotal === next.calculateTotal && prev.showDetails === next.showDetails;
+});
 
 // --- Main Page Component ---
 
@@ -253,9 +265,9 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   // ... existing states ...
   const [columns, setColumns] = useState<PipelineElement[]>([]);
   const [deals, setDeals] = useState<DealWithAssignee[]>([]);
-  // const [stats, setStats] = useState<PipelineStats>({ ... }); // Removed specific state for dynamic calculation
-  const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+
+  const queryClient = useQueryClient();
   const [showDetails, setShowDetails] = useState(false);
 
   // Modal States
@@ -339,61 +351,96 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     return count;
   }, [filters]);
 
+  // --- Queries ---
+
+  // 1. Fetch Pipelines (Columns)
+  const { data: pipelinesData } = useQuery({
+    queryKey: ['pipelines'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('pipelines').select('*').order('order_index');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5, // 5 min
+  });
+
+  // 2. Fetch Deals (Filtered)
+  const { data: dealsData, isLoading: isLoadingDeals } = useQuery({
+    queryKey: ['deals', filters],
+    queryFn: async () => {
+      let query = supabase.from('deals')
+        .select(`*, assignee:profiles(name, avatar_url)`)
+        .is('deleted_at', null); // 🔹 Soft Delete Filter
+
+      if (filters.status && filters.status.length > 0) query = query.in('status', filters.status);
+      if (filters.assigneeIds && filters.assigneeIds.length > 0) query = query.in('assignee_id', filters.assigneeIds);
+      if (filters.tags && filters.tags.length > 0) query = query.in('tag', filters.tags);
+      if (filters.minValue) query = query.gte('value', filters.minValue);
+      if (filters.maxValue) query = query.lte('value', filters.maxValue);
+      if (filters.startDate) query = query.gte('created_at', filters.startDate);
+      if (filters.endDate) query = query.lte('created_at', filters.endDate);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as DealWithAssignee[];
+    },
+    staleTime: 1000 * 60 * 2, // 2 min
+  });
+
+  // 3. Fetch Tasks for Fetched Deals
+  const dealIds = useMemo(() => dealsData?.map(d => d.id) || [], [dealsData]);
+  const { data: tasksData } = useQuery({
+    queryKey: ['tasks', dealIds], // Dependent on deals
+    queryFn: async () => {
+      if (dealIds.length === 0) return [];
+      const { data, error } = await supabase
+        .from('deal_tasks')
+        .select('id, deal_id, title, is_completed, due_date')
+        .in('deal_id', dealIds)
+        .eq('is_completed', false);
+      if (error) throw error;
+      return data;
+    },
+    enabled: dealIds.length > 0,
+    staleTime: 1000 * 60 * 2,
+  });
+
+  // 4. Fetch Stats (Recovered Credits)
+  const { data: recoveredCredits = 0 } = useQuery({
+    queryKey: ['stats', 'recovered', filters],
+    queryFn: async () => {
+      let query = supabase.from('deals').select('recovered_value').eq('status', 'won');
+      // Apply same scoping filters (assignee, date)
+      if (filters.assigneeIds && filters.assigneeIds.length > 0) query = query.in('assignee_id', filters.assigneeIds);
+      if (filters.startDate) query = query.gte('created_at', filters.startDate);
+      if (filters.endDate) query = query.lte('created_at', filters.endDate);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).reduce((acc, curr) => acc + (curr.recovered_value || 0), 0);
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
+  // Sync Query Data to Local State (For Drag & Drop Stability)
   useEffect(() => {
-    fetchPipelineData();
-  }, []);
+    if (pipelinesData) setColumns(pipelinesData);
+  }, [pipelinesData]);
 
-  const fetchPipelineData = async (silent = false) => {
-    try {
-      if (!silent) setLoading(true);
+  useEffect(() => {
+    // 🔹 Render deals even if tasks are loading (prevents empty screen)
+    if (dealsData && pipelinesData) {
+      // Process deals to add progress and nextTask
+      const totalColumns = pipelinesData.length;
+      const tasksList = tasksData || []; // Default to empty array if tasks not loaded yet
 
-      // Parallelize independent fetches
-      const [pipelinesResult, dealsResult] = await Promise.all([
-        supabase.from('pipelines').select('*').order('order_index'),
-        supabase.from('deals').select(`*, assignee:profiles(name, avatar_url)`),
-      ]);
-
-      if (pipelinesResult.error) throw pipelinesResult.error;
-      if (dealsResult.error) throw dealsResult.error;
-
-      const pipelinesData = pipelinesResult.data;
-      const dealsData = dealsResult.data;
-
-      const allDeals = (dealsData as any[]) || [];
-      const activeDeals = allDeals.filter(d => d.status === 'active');
-
-      const columnsList = pipelinesData || [];
-      const totalColumns = columnsList.length;
-
-      // Fetch tasks separately to ensure stability
-      let dealTasks: any[] = [];
-      const dealIds = allDeals.map(d => d.id);
-
-      if (dealIds.length > 0) {
-        const { data: tasksData, error: tasksError } = await supabase
-          .from('deal_tasks')
-          .select('id, deal_id, title, is_completed, due_date')
-          .in('deal_id', dealIds)
-          .eq('is_completed', false);
-
-        if (!tasksError) {
-          dealTasks = tasksData || [];
-        } else {
-          console.error('Error fetching deal tasks:', tasksError);
-        }
-      }
-
-      // Calculate progress and attach next task
-      const dealsWithProgress = allDeals.map(deal => {
-        const columnIndex = columnsList.findIndex(c => c.id === deal.pipeline_id);
+      const processed = dealsData.map(deal => {
+        const columnIndex = pipelinesData.findIndex(c => c.id === deal.pipeline_id);
         const progress = totalColumns > 0 && columnIndex >= 0
           ? Math.round(((columnIndex + 1) / totalColumns) * 100)
           : 0;
 
-        // Find next task from separate fetched list
-        const tasks = dealTasks.filter(t => t.deal_id === deal.id);
-
-        // Sort by due date (ascending)
+        const tasks = tasksList.filter((t: any) => t.deal_id === deal.id);
         tasks.sort((a: any, b: any) => {
           if (!a.due_date) return 1;
           if (!b.due_date) return -1;
@@ -410,31 +457,28 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
         return { ...deal, progress, nextTask };
       });
-
-      setColumns(columnsList);
-      setDeals(dealsWithProgress);
-
-      const pipelineValue = activeDeals.reduce((acc, deal) => acc + (deal.value || 0), 0);
-      const recoveredCredits = allDeals
-        .filter(d => d.status === 'won')
-        .reduce((acc, deal) => acc + (deal.recovered_value || 0), 0);
-
-      // Stats are now calculated dynamically
-      // setStats({ ... });
-
-    } catch (error) {
-      console.error('Error fetching pipeline data:', error);
-    } finally {
-      if (!silent) setLoading(false);
+      setDeals(processed);
     }
+  }, [dealsData, tasksData, pipelinesData]);
+
+  // Refetch wrapper for legacy calls
+  const fetchPipelineData = (silent = false) => {
+    queryClient.invalidateQueries({ queryKey: ['deals'] });
+    queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    queryClient.invalidateQueries({ queryKey: ['pipelines'] });
+    queryClient.invalidateQueries({ queryKey: ['stats'] });
   };
 
-  // --- Filtering Logic ---
+  // --- Filtering Logic (Client-Side Search Only) ---
   const filteredDeals = useMemo(() => {
-    return deals.filter(deal => {
-      // Search Term Filter
-      if (searchTerm.trim()) {
-        const searchLower = searchTerm.toLowerCase();
+    // 1. Text Search (Client-Side)
+    let outcome = deals;
+
+    // Optimistic / Client-side filtering for Search Term
+    // Because server-side fulltext search might be overkill if we already have the relevant subset
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      outcome = outcome.filter(deal => {
         const matchesMain =
           deal.client_name?.toLowerCase().includes(searchLower) ||
           deal.contact_name?.toLowerCase().includes(searchLower) ||
@@ -442,45 +486,18 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
           deal.email?.toLowerCase().includes(searchLower) ||
           deal.title?.toLowerCase().includes(searchLower);
 
-        // Search in custom fields
         let matchesCustom = false;
         if (deal.custom_fields && typeof deal.custom_fields === 'object' && !Array.isArray(deal.custom_fields)) {
           matchesCustom = Object.values(deal.custom_fields).some(val =>
             String(val).toLowerCase().includes(searchLower)
           );
         }
+        return matchesMain || matchesCustom;
+      });
+    }
 
-        if (!matchesMain && !matchesCustom) return false;
-      }
-
-      // Status Filter (Default 'active')
-      if (filters.status.length > 0 && !filters.status.includes(deal.status)) return false;
-
-      // Tag Filter
-      if (filters.tags.length > 0 && (!deal.tag || !filters.tags.includes(deal.tag))) return false;
-
-      // Assignee Filter
-      if (filters.assigneeIds.length > 0 && (!deal.assignee_id || !filters.assigneeIds.includes(deal.assignee_id))) return false;
-
-      // Value Range Filter
-      if (filters.minValue && (deal.value || 0) < parseFloat(filters.minValue)) return false;
-      if (filters.maxValue && (deal.value || 0) > parseFloat(filters.maxValue)) return false;
-
-      // Date Range Filter
-      if (filters.startDate) {
-        const dealDate = new Date(deal.created_at || '').setHours(0, 0, 0, 0);
-        const filterStart = new Date(filters.startDate).setHours(0, 0, 0, 0);
-        if (dealDate < filterStart) return false;
-      }
-      if (filters.endDate) {
-        const dealDate = new Date(deal.created_at || '').setHours(0, 0, 0, 0);
-        const filterEnd = new Date(filters.endDate).setHours(0, 0, 0, 0);
-        if (dealDate > filterEnd) return false;
-      }
-
-      return true;
-    });
-  }, [deals, filters, searchTerm]);
+    return outcome;
+  }, [deals, searchTerm]);
 
   // Extract all unique custom field keys globally
   const globalCustomKeys = useMemo(() => {
@@ -583,57 +600,87 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
   const handleSaveDeal = async (dealData: Partial<Deal>) => {
     try {
       let savedDeal: DealWithAssignee | null = null;
-      let dealToSave = { ...dealData };
-      if (!dealToSave.pipeline_id && !dealToSave.id) {
-        dealToSave.pipeline_id = columns[0]?.id;
-      }
-
-      if (dealData.id) {
-        // Update
+      if (selectedDeal) {
+        // Update existing
         const { data, error } = await supabase
           .from('deals')
-          .update(dealToSave)
-          .eq('id', dealData.id)
+          .update(dealData)
+          .eq('id', selectedDeal.id)
           .select(`*, assignee:profiles(name, avatar_url)`)
           .single();
 
         if (error) throw error;
-        savedDeal = data as any;
+        savedDeal = data;
+
+        // Optimistic Update
         setDeals(prev => prev.map(d => d.id === savedDeal!.id ? savedDeal! : d));
       } else {
-        // Create
+        // Create new
         const { data, error } = await supabase
           .from('deals')
-          .insert(dealToSave as any)
+          .insert([dealData] as any)
           .select(`*, assignee:profiles(name, avatar_url)`)
           .single();
 
         if (error) throw error;
-        savedDeal = data as any;
+        savedDeal = data;
+
+        // Optimistic Update
         setDeals(prev => [...prev, savedDeal!]);
       }
-      fetchPipelineData(true); // silent refetch
+      setIsModalOpen(false);
+      fetchPipelineData(true);
     } catch (error) {
       console.error('Error saving deal:', error);
-      alert('Erro ao salvar.');
+      alert('Erro ao salvar oportunidade.');
     }
   };
 
-  const handleDeleteDeal = async (dealId: string) => {
+  const handleDeleteDeal = async (id: string | undefined) => { // Updated to accept ID or use selected
+    const dealId = id || selectedDeal?.id;
+    if (!dealId) return;
+
+    if (!confirm('Tem certeza que deseja mover esta oportunidade para a lixeira?')) return;
+
+    // Optimistic Update
     const originalDeals = [...deals];
     setDeals(prev => prev.filter(d => d.id !== dealId));
+    setIsModalOpen(false);
 
     try {
+      // 🔹 Soft Delete: Update deleted_at instead of DELETE
       const { error } = await supabase
         .from('deals')
-        .delete()
+        .update({ deleted_at: new Date().toISOString() } as any)
         .eq('id', dealId);
 
       if (error) throw error;
       fetchPipelineData(true);
     } catch (error) {
       console.error('Error deleting deal:', error);
-      alert('Erro ao excluir.');
+      alert('Erro ao excluir oportunidade.');
+      setDeals(originalDeals);
+    }
+  };
+
+  const handleBulkDelete = async (dealIds: string[]) => {
+    if (!confirm(`Tem certeza que deseja mover ${dealIds.length} leads para a lixeira?`)) return;
+
+    const originalDeals = [...deals];
+    setDeals(prev => prev.filter(d => !dealIds.includes(d.id)));
+
+    try {
+      // 🔹 Soft Delete: Update deleted_at instead of DELETE
+      const { error } = await supabase
+        .from('deals')
+        .update({ deleted_at: new Date().toISOString() } as any)
+        .in('id', dealIds);
+
+      if (error) throw error;
+      fetchPipelineData(true);
+    } catch (error) {
+      console.error('Error deleting deals:', error);
+      alert('Erro ao excluir leads.');
       setDeals(originalDeals);
     }
   };
@@ -1003,7 +1050,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
             },
             {
               label: 'Créditos Recuperados',
-              value: formatBRL(filteredDeals.reduce((acc, deal) => acc + (deal.recovered_value || 0), 0)),
+              value: formatBRL(recoveredCredits),
               trend: 'somatório visível',
               icon: 'check_circle',
               color: 'green'
@@ -1027,16 +1074,31 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
         {/* Kanban Board Container with Snap Scroll */}
         <div className="flex-1 overflow-x-auto overflow-y-auto lg:overflow-y-hidden px-4 md:px-6 pb-6 custom-scrollbar">
-          {loading ? (
-            <div className="flex h-full items-center justify-center text-gray-500">Carregando pipeline...</div>
+          {isLoadingDeals ? (
+            <PipelineSkeleton />
           ) : viewMode === 'list' ? (
             <PipelineListView
               deals={filteredDeals}
               columns={columns}
               onNavigate={onNavigate}
               onEdit={(deal) => handleOpenModal(deal)}
-              onBatchUpdate={handleBatchUpdate}
-              getTagColor={getTagColor}
+              onBatchUpdate={async (ids, updates) => {
+                // Implement batch update integration with Supabase here
+                const { error } = await supabase.from('deals').update(updates).in('id', ids);
+                if (error) {
+                  console.error('Batch update failed', error);
+                  alert('Falha na atualização em massa.');
+                } else {
+                  fetchPipelineData(true);
+                }
+              }}
+              onBulkDelete={handleBulkDelete}
+              getTagColor={(tag) => {
+                const colors = ['blue', 'green', 'purple', 'amber', 'rose', 'cyan'];
+                let hash = 0;
+                for (let i = 0; i < tag.length; i++) hash = tag.charCodeAt(i) + ((hash << 5) - hash);
+                return colors[Math.abs(hash) % colors.length];
+              }}
             />
           ) : (
             <DndContext
