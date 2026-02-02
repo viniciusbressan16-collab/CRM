@@ -597,7 +597,51 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     setSelectedDeal(undefined);
   };
 
+  const handleExport = () => {
+    if (!filteredDeals.length) return alert('Nenhum dado para exportar.');
+
+    // 1. Headers
+    const staticHeaders = ['ID', 'Nome', 'Valor', 'Status', 'Fase', 'Cliente', 'Responsável', 'Criado em', 'CNPJ', 'Telefone', 'Email'];
+    const customHeaders = globalCustomKeys;
+    const allHeaders = [...staticHeaders, ...customHeaders];
+
+    // 2. Rows
+    const rows = filteredDeals.map(deal => {
+      const rowParams = [
+        deal.id,
+        `"${(deal.title || '').replace(/"/g, '""')}"`,
+        (deal.value || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 }), // Format currency for Excel
+        deal.status,
+        columns.find(c => c.id === deal.pipeline_id)?.name || 'Sem Fase',
+        `"${(deal.client_name || '').replace(/"/g, '""')}"`,
+        deal.assignee?.name || '',
+        new Date(deal.created_at || '').toLocaleDateString('pt-BR'),
+        deal.cnpj || '',
+        deal.phone || '',
+        deal.email || ''
+      ];
+      // Custom Fields
+      customHeaders.forEach(key => {
+        const val = (deal.custom_fields as any)?.[key] || '';
+        rowParams.push(`"${String(val).replace(/"/g, '""')}"`);
+      });
+      return rowParams.join(';'); // Use semicolon for Excel/BR
+    });
+
+    // 3. Blob & Download with BOM for UTF-8
+    const csvContent = '\uFEFF' + [allHeaders.join(';'), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `leads_export_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSaveDeal = async (dealData: Partial<Deal>) => {
+
     try {
       let savedDeal: DealWithAssignee | null = null;
       if (selectedDeal) {
@@ -980,6 +1024,15 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
             >
               <span className="material-symbols-outlined text-[20px]">upload_file</span>
               <span className="hidden sm:inline">Importar</span>
+            </button>
+
+            {/* Export Button */}
+            <button
+              className="bg-surface-light dark:bg-surface-dark border border-gray-200 dark:border-gray-700 text-text-main-light dark:text-text-main-dark hover:bg-gray-50 dark:hover:bg-white/5 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-all"
+              onClick={handleExport}
+            >
+              <span className="material-symbols-outlined text-[20px]">download</span>
+              <span className="hidden sm:inline">Exportar</span>
             </button>
 
             {/* Toggle Details */}
