@@ -5,6 +5,8 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!showMenu) return; // Only add listener if menu is open
+
     function handleClickOutside(event: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setShowMenu(false);
@@ -14,7 +16,7 @@ export default function KanbanCard({ tag, tagColor, title, value, avatar, avatar
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
     };
-  }, []);
+  }, [showMenu]);
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent card click

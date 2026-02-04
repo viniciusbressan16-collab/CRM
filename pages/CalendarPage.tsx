@@ -37,6 +37,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
     const [filterAssignee, setFilterAssignee] = useState<string>(() =>
         localStorage.getItem('calendar_filterAssignee') || 'all'
     );
+    const [calendarAssignee, setCalendarAssignee] = useState<string>(() =>
+        localStorage.getItem('calendar_calendarAssignee') || 'all'
+    );
 
     const [appointments, setAppointments] = useState<any[]>([]);
     const [tasks, setTasks] = useState<any[]>([]);
@@ -49,6 +52,7 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
     useEffect(() => { localStorage.setItem('calendar_filterPriority', filterPriority); }, [filterPriority]);
     useEffect(() => { localStorage.setItem('calendar_filterDate', filterDate); }, [filterDate]);
     useEffect(() => { localStorage.setItem('calendar_filterAssignee', filterAssignee); }, [filterAssignee]);
+    useEffect(() => { localStorage.setItem('calendar_calendarAssignee', calendarAssignee); }, [calendarAssignee]);
 
     // Appointment Modal State
     const [isApptModalOpen, setIsApptModalOpen] = useState(false);
@@ -106,12 +110,24 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
 
             // Assignee Filter
             if (filterAssignee !== 'all') {
-                if (!task.assignee_ids || !task.assignee_ids.includes(filterAssignee)) return false;
+                // For appointments/tasks with assignee_ids array
+                if (task.assignee_ids && task.assignee_ids.includes(filterAssignee)) return true;
+                // For direct assignment (legacy or single)
+                if (task.assignee_id === filterAssignee) return true;
+                // For appointments which usually use user_id
+                if (task.user_id === filterAssignee) return true;
+
+                return false;
             }
 
             return true;
         });
     };
+
+    const filteredAppointments = React.useMemo(() => {
+        if (calendarAssignee === 'all') return appointments;
+        return appointments.filter(appt => appt.user_id === calendarAssignee);
+    }, [appointments, calendarAssignee]);
 
     const fetchData = async () => {
         setLoading(true);
@@ -138,7 +154,6 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
             const { data: appts, error: apptError } = await supabase
                 .from('appointments')
                 .select('*')
-                .eq('user_id', user!.id)
                 .gte('start_time', startDate.toISOString())
                 .lte('start_time', endDate.toISOString());
 
@@ -151,10 +166,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 .select('*, project:internal_projects(title, category)')
                 .or(`status.eq.todo,status.eq.in_progress,status.eq.done`);
 
-            // Only filter by assignee if NOT a manager
-            if (profile?.role !== 'manager') {
-                projectTasksQuery = projectTasksQuery.contains('assignee_ids', [user!.id]);
-            }
+            // Fetch All Project Tasks (Client-side filtered)
+            // Removed manager check to allow anyone to see team tasks
+
 
             const { data: projectTasks, error: taskError } = await projectTasksQuery;
 
@@ -165,9 +179,9 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 .from('deal_tasks')
                 .select('*, deal:deals(client_name)');
 
-            if (profile?.role !== 'manager') {
-                dealTasksQuery = dealTasksQuery.contains('assignee_ids', [user!.id]);
-            }
+            // Fetch All Deal Tasks (Client-side filtered)
+            // Removed manager check to allow anyone to see team tasks
+
 
             const { data: dealTasks, error: dealTaskError } = await dealTasksQuery;
 
@@ -328,40 +342,43 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
             <div className="flex flex-col h-full bg-transparent overflow-hidden">
                 <Header
                     title="Calendário e Tarefas"
-                    description="Gerencie seus compromissos e pendências."
+                    description="Gerencie seus compromissos e pendências em um só lugar."
                     onNavigate={onNavigate}
                 >
                     <div className="flex items-center gap-3">
-                        {/* Navigation & Date Label */}
-                        <div className="bg-black/20 border border-white/10 rounded-lg p-1 flex items-center gap-1">
-                            <button onClick={() => handleNavigate('prev')} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors">
+                        {/* Navigation & Date Label - Unified Glass Group */}
+                        <div className="glass-panel-clear p-1 rounded-xl flex items-center gap-2 border border-white/5 shadow-sm">
+                            <button onClick={() => handleNavigate('prev')} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">chevron_left</span>
                             </button>
-                            <span className="text-xs font-bold text-white/70 uppercase px-2 min-w-[100px] text-center bg-transparent">
+                            <span className="text-xs font-bold text-white/90 uppercase px-3 min-w-[120px] text-center tracking-wider">
                                 {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                             </span>
-                            <button onClick={() => handleNavigate('next')} className="p-1.5 hover:bg-white/10 rounded-md text-gray-400 hover:text-white transition-colors">
+                            <button onClick={() => handleNavigate('next')} className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-white transition-colors">
                                 <span className="material-symbols-outlined text-[20px]">chevron_right</span>
                             </button>
                         </div>
 
-                        <button onClick={goToToday} className="px-3 py-2 text-xs font-bold text-gray-400 hover:text-primary hover:bg-primary/5 border border-transparent hover:border-primary/20 rounded-lg transition-all">
-                            Hoje
+                        <button
+                            onClick={goToToday}
+                            className="px-4 py-2 text-xs font-bold text-primary hover:bg-primary/10 border border-primary/20 hover:border-primary/50 rounded-xl transition-all shadow-[0_0_10px_rgba(212,175,55,0.1)]"
+                        >
+                            HOJE
                         </button>
 
-                        <div className="w-px h-8 bg-white/10 mx-1"></div>
+                        <div className="w-px h-8 bg-gradient-to-b from-transparent via-white/10 to-transparent mx-2"></div>
 
                         {/* View Toggle */}
-                        <div className="bg-black/20 border border-white/10 rounded-lg p-1 flex items-center mr-2">
+                        <div className="glass-panel-clear p-1 rounded-xl flex items-center border border-white/5">
                             <button
                                 onClick={() => setCurrentView('week')}
-                                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${currentView === 'week' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${currentView === 'week' ? 'bg-primary text-black shadow-[0_0_15px_rgba(212,175,55,0.3)]' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                             >
                                 Semana
                             </button>
                             <button
                                 onClick={() => setCurrentView('month')}
-                                className={`px-3 py-1.5 rounded-md text-xs font-bold transition-all ${currentView === 'month' ? 'bg-primary text-black shadow-lg shadow-primary/20' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                                className={`px-4 py-2 rounded-lg text-xs font-bold transition-all ${currentView === 'month' ? 'bg-primary text-black shadow-[0_0_15px_rgba(212,175,55,0.3)]' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                             >
                                 Mês
                             </button>
@@ -369,10 +386,10 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
 
                         <button
                             onClick={() => handleOpenApptModal()}
-                            className="glass-button px-4 py-2 text-primary font-bold rounded-lg flex items-center gap-2 hover:text-black hover:bg-primary transition-all"
+                            className="bg-gradient-to-r from-primary to-amber-300 text-black px-5 py-2.5 rounded-xl font-bold text-sm shadow-[0_0_20px_rgba(212,175,55,0.3)] hover:shadow-[0_0_30px_rgba(212,175,55,0.5)] hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2"
                         >
                             <span className="material-symbols-outlined text-[20px]">add</span>
-                            Novo Agendamento
+                            Novo
                         </button>
                     </div>
                 </Header>
@@ -380,6 +397,21 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                 {/* Main Content Area - Scrollable */}
                 <div className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar">
                     <div className="max-w-[1600px] mx-auto space-y-8">
+
+                        {/* Global Filters (Moved here for visibility) */}
+                        <div className="flex items-center justify-end gap-3 mb-[-20px] relative z-20">
+                            <select
+                                value={calendarAssignee}
+                                onChange={(e) => setCalendarAssignee(e.target.value)}
+                                className="glass-panel-clear bg-black/40 border border-white/10 text-xs rounded-xl px-4 py-2.5 text-white focus:border-primary/50 outline-none transition-all hover:bg-white/5 font-medium min-w-[220px] shadow-lg backdrop-blur-xl appearance-none cursor-pointer"
+                                style={{ backgroundImage: 'none' }} // Remove default arrow if needed, or customize
+                            >
+                                <option value="all">📅  Todos os Calendários</option>
+                                {profiles.map(p => (
+                                    <option key={p.id} value={p.id}>👤  {p.name}</option>
+                                ))}
+                            </select>
+                        </div>
 
                         {/* Calendar View Container - MORE TRANSPARENT */}
                         <div className="glass-panel-clear rounded-2xl overflow-hidden min-h-[600px] border border-white/5 relative z-10">
@@ -403,11 +435,11 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                         <div className="flex-1 overflow-y-auto relative custom-scrollbar h-[500px]">
                                             <div className="flex min-h-[1080px]">
                                                 {/* Time Column (06:00 - 23:00) */}
-                                                <div className="w-16 shrink-0 border-r border-glass-border bg-white/30 dark:bg-black/20 z-10 sticky left-0 backdrop-blur-md">
+                                                <div className="w-16 shrink-0 border-r border-white/5 bg-black/40 z-10 sticky left-0 backdrop-blur-md">
                                                     {Array.from({ length: 18 }).map((_, i) => {
                                                         const hour = i + 6; // Start at 06:00
                                                         return (
-                                                            <div key={hour} className="h-[60px] text-xs text-gray-500 text-center pt-2 border-b border-gray-200/10 dark:border-white/5 relative">
+                                                            <div key={hour} className="h-[60px] text-[10px] font-medium text-gray-500 text-center pt-2 border-b border-white/5 relative">
                                                                 <span className="relative -top-2.5">{hour.toString().padStart(2, '0')}:00</span>
                                                             </div>
                                                         );
@@ -439,13 +471,13 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                                                     className="absolute left-0 right-0 z-20 flex items-center pointer-events-none"
                                                                     style={{ top: `${lineTop}px` }}
                                                                 >
-                                                                    <div className="h-3 w-3 rounded-full bg-red-500 -ml-1.5 shadow-[0_0_8px_rgba(239,68,68,0.8)] border border-black/20"></div>
-                                                                    <div className="h-[2px] flex-1 bg-gradient-to-r from-red-500 via-red-500/50 to-transparent shadow-[0_0_4px_rgba(239,68,68,0.3)]"></div>
+                                                                    <div className="h-3 w-3 rounded-full bg-primary -ml-1.5 shadow-[0_0_10px_rgba(212,175,55,0.8)] border border-black"></div>
+                                                                    <div className="h-[2px] flex-1 bg-gradient-to-r from-primary via-primary/50 to-transparent shadow-[0_0_8px_rgba(212,175,55,0.4)]"></div>
                                                                 </div>
                                                             )}
 
                                                             {/* Events */}
-                                                            {appointments
+                                                            {filteredAppointments
                                                                 .filter(a => isSameDay(new Date(a.start_time), date))
                                                                 .map(appt => {
                                                                     const start = new Date(appt.start_time);
@@ -518,23 +550,24 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                             return days.map((date, index) => {
                                                 if (!date) return <div key={`empty-${index}`} className="min-h-[100px] bg-white/5 rounded-xl border border-transparent"></div>;
 
-                                                const dayAppts = appointments.filter(a => isSameDay(new Date(a.start_time), date));
+                                                const dayAppts = filteredAppointments.filter(a => isSameDay(new Date(a.start_time), date));
                                                 const isToday = isSameDay(date, new Date());
 
                                                 return (
-                                                    <div key={date.toISOString()} className={`min-h-[100px] p-2 rounded-xl border transition-all relative group flex flex-col ${isToday ? 'bg-primary/10 border-primary/30 shadow-[0_0_15px_rgba(212,175,55,0.1)]' : 'bg-white/5 border-white/5 hover:border-primary/20'}`}>
-                                                        <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full mb-1 ${isToday ? 'bg-primary text-black shadow-lg shadow-primary/30' : 'text-gray-400 group-hover:bg-white/10'}`}>
+                                                    <div key={date.toISOString()} className={`min-h-[100px] p-2 rounded-xl border transition-all relative group flex flex-col ${isToday ? 'bg-primary/5 border-primary/30 shadow-[0_0_20px_rgba(212,175,55,0.05)]' : 'bg-black/40 border-white/5 hover:border-white/10'}`}>
+                                                        <span className={`text-sm font-bold w-8 h-8 flex items-center justify-center rounded-full mb-1 transition-all ${isToday ? 'bg-primary text-black shadow-[0_0_15px_rgba(212,175,55,0.4)] scale-110' : 'text-gray-500 group-hover:text-gray-300'}`}>
                                                             {date.getDate()}
                                                         </span>
-                                                        <div className="flex-1 space-y-1">
+                                                        <div className="flex-1 space-y-1.5">
                                                             {dayAppts.map(appt => (
                                                                 <div
                                                                     key={appt.id}
                                                                     onClick={(e) => { e.stopPropagation(); handleOpenApptModal(appt); }}
-                                                                    className="text-[10px] bg-primary/20 text-slate-900 dark:text-primary px-1.5 py-1 rounded truncate cursor-pointer hover:bg-primary/30 transition-colors font-medium border-l-[2px] border-primary"
+                                                                    className="text-[10px] bg-primary/10 text-primary-light px-2 py-1.5 rounded-lg truncate cursor-pointer hover:bg-primary/20 transition-all font-semibold border border-primary/20 hover:border-primary/40 shadow-sm"
                                                                     title={`${new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} - ${appt.title}`}
                                                                 >
-                                                                    {new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })} {appt.title}
+                                                                    <span className="opacity-70 mr-1 font-normal">{new Date(appt.start_time).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                                                    {appt.title}
                                                                 </div>
                                                             ))}
                                                         </div>
@@ -587,18 +620,17 @@ export default function CalendarPage({ onNavigate, activePage }: CalendarPagePro
                                     <div className="h-6 w-px bg-gray-300 dark:bg-white/10 mx-2"></div>
 
                                     <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
-                                        {profile?.role === 'manager' && (
-                                            <select
-                                                value={filterAssignee}
-                                                onChange={(e) => setFilterAssignee(e.target.value)}
-                                                className="bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-xl px-3 py-2 text-slate-700 dark:text-white focus:border-primary outline-none transition-colors hover:bg-white dark:hover:bg-white/5 font-medium min-w-[140px]"
-                                            >
-                                                <option value="all">Todos os Responsáveis</option>
-                                                {profiles.map(p => (
-                                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                                ))}
-                                            </select>
-                                        )}
+                                        <select
+                                            value={filterAssignee}
+                                            onChange={(e) => setFilterAssignee(e.target.value)}
+                                            className="bg-white/50 dark:bg-black/20 border border-gray-200 dark:border-white/10 text-xs rounded-xl px-3 py-2 text-slate-700 dark:text-white focus:border-primary outline-none transition-colors hover:bg-white dark:hover:bg-white/5 font-medium min-w-[140px]"
+                                        >
+                                            <option value="all">Todos os Responsáveis</option>
+                                            {profiles.map(p => (
+                                                <option key={p.id} value={p.id}>{p.name}</option>
+                                            ))}
+                                        </select>
+                                        {/* Assignee Filter Moved to Top */}
                                         <select
                                             value={filterStatus}
                                             onChange={(e) => setFilterStatus(e.target.value as any)}

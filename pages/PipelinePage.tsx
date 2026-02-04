@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import PipelineSkeleton from '../components/PipelineSkeleton';
 import Header from '../components/Header';
@@ -63,7 +63,7 @@ interface PipelineStats {
 
 // --- Helper Components ---
 
-const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask, showDetails }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: () => void, onDelete: () => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void, showDetails: boolean }) => {
+const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNavigate, onCompleteTask, showDetails }: { deal: DealWithAssignee, getTagColor: (t: string) => string, onEdit: (deal: DealWithAssignee) => void, onDelete: (id: string) => void, onNavigate: (view: View, id?: string) => void, onCompleteTask: (id: string) => void, showDetails: boolean }) => {
   const {
     attributes,
     listeners,
@@ -77,7 +77,22 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
     transform: CSS.Translate.toString(transform),
     transition,
     opacity: isDragging ? 0.3 : 1,
+    contentVisibility: 'auto' as const,
+    containIntrinsicSize: '0 200px',
   };
+
+  const handleEdit = useCallback((e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    onEdit(deal);
+  }, [deal, onEdit]);
+
+  const handleDelete = useCallback(() => {
+    onDelete(deal.id);
+  }, [deal.id, onDelete]);
+
+  const handleNavigate = useCallback(() => {
+    onNavigate('client', deal.id);
+  }, [deal.id, onNavigate]);
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners} className="touch-none">
@@ -91,9 +106,9 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
         time="Hoje"
         progress={deal.progress}
         status={deal.status === 'active' ? undefined : deal.status}
-        onEdit={onEdit}
-        onDelete={onDelete}
-        onClick={() => onNavigate('client', deal.id)}
+        onEdit={handleEdit}
+        onDelete={handleDelete}
+        onClick={handleNavigate}
         showDetails={showDetails}
         cnpj={deal.cnpj}
         contactName={deal.contact_name}
@@ -113,7 +128,7 @@ const SortableDealCard = React.memo(({ deal, getTagColor, onEdit, onDelete, onNa
     prev.showDetails === next.showDetails;
 });
 
-const PipelineColumn = React.memo(({ column, deals, calculateTotal, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask, showDetails }: any) => {
+const PipelineColumn = React.memo(({ column, deals, totalValue, getTagColor, handleOpenModal, handleDeleteDeal, onEditColumn, onDeleteColumn, onNavigate, canManageColumns, onCompleteTask, showDetails }: any) => {
   // Sortable hook for the COLUMN itself
   const {
     attributes,
@@ -145,7 +160,36 @@ const PipelineColumn = React.memo(({ column, deals, calculateTotal, getTagColor,
     opacity: isDragging ? 0.5 : 1,
   };
 
+  /* --- Infinite Scroll Logic --- */
+  const [visibleCount, setVisibleCount] = useState(20);
+  const loadMoreRef = useRef<HTMLDivElement>(null);
+
+  // Reset window when column ID changes (rare)
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [column.id]);
+
+  // Derive visible deals
+  const visibleDeals = useMemo(() => deals.slice(0, visibleCount), [deals, visibleCount]);
+
+  // Intersection Observer for Infinite Scroll
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && visibleCount < deals.length) {
+          // Load more
+          setVisibleCount((prev) => Math.min(prev + 20, deals.length));
+        }
+      },
+      { root: null, rootMargin: '200px', threshold: 0.1 }
+    );
+
+    if (loadMoreRef.current) observer.observe(loadMoreRef.current);
+    return () => observer.disconnect();
+  }, [visibleCount, deals.length]);
+
   const [showMenu, setShowMenu] = useState(false);
+
 
   return (
     <div
@@ -197,11 +241,11 @@ const PipelineColumn = React.memo(({ column, deals, calculateTotal, getTagColor,
         {/* Stats Card - Compact & Elegant */}
         <div className="glass-panel mb-3 shrink-0 p-3 rounded-lg border border-primary/10 flex items-center justify-between">
           <span className="text-[10px] uppercase tracking-widest text-gray-400 font-medium">Total</span>
-          <span className="text-sm font-bold text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(calculateTotal(column.id))}</span>
+          <span className="text-sm font-bold text-primary">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalValue)}</span>
         </div>
 
         <SortableContext
-          items={deals.map((d: any) => d.id)}
+          items={visibleDeals.map((d: any) => d.id)}
           strategy={verticalListSortingStrategy}
           id={column.id}
         >
@@ -214,19 +258,27 @@ const PipelineColumn = React.memo(({ column, deals, calculateTotal, getTagColor,
                 className="py-8 opacity-60 hover:opacity-100 transition-opacity duration-300 scale-90"
               />
             ) : (
-              deals.map((deal: any) => (
-                <div key={deal.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '160px' }}>
-                  <SortableDealCard
-                    deal={deal}
-                    getTagColor={getTagColor}
-                    onEdit={() => handleOpenModal(deal)}
-                    onDelete={() => handleDeleteDeal(deal.id)}
-                    onNavigate={onNavigate}
-                    onCompleteTask={onCompleteTask}
-                    showDetails={showDetails}
-                  />
-                </div>
-              ))
+              <>
+                {visibleDeals.map((deal: any) => (
+                  <div key={deal.id} style={{ contentVisibility: 'auto', containIntrinsicSize: '160px' }}>
+                    <SortableDealCard
+                      deal={deal}
+                      getTagColor={getTagColor}
+                      onEdit={handleOpenModal}
+                      onDelete={handleDeleteDeal}
+                      onNavigate={onNavigate}
+                      onCompleteTask={onCompleteTask}
+                      showDetails={showDetails}
+                    />
+                  </div>
+                ))}
+                {/* Scroll Sentinel */}
+                {visibleCount < deals.length && (
+                  <div ref={loadMoreRef} className="h-8 flex items-center justify-center opacity-50 text-xs text-gray-400">
+                    Carregando mais...
+                  </div>
+                )}
+              </>
             )}
             <button
               onClick={() => handleOpenModal(undefined, column.id)}
@@ -241,14 +293,29 @@ const PipelineColumn = React.memo(({ column, deals, calculateTotal, getTagColor,
     </div>
   );
 }, (prev, next) => {
-  if (prev.deals.length !== next.deals.length) return false;
   if (prev.column.id !== next.column.id) return false;
-  // Deep compare deals might be expensive, but shallow check on deals array reference is what we rely on usually.
-  // We can just rely on reference equality if parent (ProcessDeals) creates new arrays properly.
-  // Given previous code: setDeals(processed) creates a new array every time.
-  // So react.memo might not help unless we are careful.
-  // But let's keep it to prevent external prop changes from triggering re-renders if deals didn't change (e.g. viewMode change).
-  return prev.deals === next.deals && prev.calculateTotal === next.calculateTotal && prev.showDetails === next.showDetails;
+  if (prev.totalValue !== next.totalValue) return false;
+  if (prev.showDetails !== next.showDetails) return false;
+  if (prev.deals.length !== next.deals.length) return false;
+
+  // Shallow comparison of deal IDs avoiding full array reference check
+  // This allows the column to skip render if the list of deals contains the same IDs in the same order
+  for (let i = 0; i < prev.deals.length; i++) {
+    if (prev.deals[i].id !== next.deals[i].id) return false;
+    // We also check update time or critical fields if necessary, but Deal Card handles its own memo
+    // We need to check if the deal object reference changed? 
+    // If we only check ID, and the deal title changed, the Column won't re-render, 
+    // BUT the DealCard inside might need to re-render.
+    // However, SortableContext needs the IDs.
+    // If the deal REFERENCE changes but ID is same, SortableDealCard (which gets the deal object) needs to update.
+    // Since PipelineColumn renders SortableDealCard passing the deal object, 
+    // if PipelineColumn doesn't re-render, SortableDealCard won't receive the new props?
+    // WRONG. React updates propagate. If PipelineColumn is skipped, children are skipped.
+    // So we MUST return FALSE if any deal object reference changed.
+    if (prev.deals[i] !== next.deals[i]) return false;
+  }
+
+  return true;
 });
 
 // --- Main Page Component ---
@@ -369,7 +436,23 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     queryKey: ['deals', filters],
     queryFn: async () => {
       let query = supabase.from('deals')
-        .select(`*, assignee:profiles(name, avatar_url)`)
+        .select(`
+          id,
+          title,
+          value,
+          status,
+          pipeline_id,
+          tag,
+          client_name,
+          contact_name,
+          created_at,
+          updated_at,
+          cnpj,
+          email,
+          phone,
+          progress,
+          assignee:profiles(name, avatar_url)
+        `)
         .is('deleted_at', null); // 🔹 Soft Delete Filter
 
       if (filters.status && filters.status.length > 0) query = query.in('status', filters.status);
@@ -427,25 +510,36 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     if (pipelinesData) setColumns(pipelinesData);
   }, [pipelinesData]);
 
+  // Optimized Task Loading & Merging (Prevents O(N*M) complexity)
   useEffect(() => {
-    // 🔹 Render deals even if tasks are loading (prevents empty screen)
     if (dealsData && pipelinesData) {
-      // Process deals to add progress and nextTask
+      // 1. Index Tasks by Deal ID (O(T))
+      const tasksMap = new Map<string, any[]>();
+      (tasksData || []).forEach((t: any) => {
+        if (!tasksMap.has(t.deal_id)) tasksMap.set(t.deal_id, []);
+        tasksMap.get(t.deal_id)?.push(t);
+      });
+
+      // 2. Process Deals (O(D))
       const totalColumns = pipelinesData.length;
-      const tasksList = tasksData || []; // Default to empty array if tasks not loaded yet
+      const columnIdToIndex = new Map(pipelinesData.map((c, i) => [c.id, i]));
 
       const processed = dealsData.map(deal => {
-        const columnIndex = pipelinesData.findIndex(c => c.id === deal.pipeline_id);
+        const columnIndex = columnIdToIndex.get(deal.pipeline_id) ?? -1;
         const progress = totalColumns > 0 && columnIndex >= 0
           ? Math.round(((columnIndex + 1) / totalColumns) * 100)
           : 0;
 
-        const tasks = tasksList.filter((t: any) => t.deal_id === deal.id);
-        tasks.sort((a: any, b: any) => {
-          if (!a.due_date) return 1;
-          if (!b.due_date) return -1;
-          return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
-        });
+        const tasks = tasksMap.get(deal.id) || [];
+
+        // Only sort if we have tasks (rarely changed)
+        if (tasks.length > 1) {
+          tasks.sort((a: any, b: any) => {
+            if (!a.due_date) return 1;
+            if (!b.due_date) return -1;
+            return new Date(a.due_date).getTime() - new Date(b.due_date).getTime();
+          });
+        }
 
         const nextTask = tasks.length > 0
           ? {
@@ -459,23 +553,21 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       });
       setDeals(processed);
     }
-  }, [dealsData, tasksData, pipelinesData]);
+  }, [dealsData, tasksData, pipelinesData]); // Keeping this as effect to sync with server state while allowing local DnD mutations
 
   // Refetch wrapper for legacy calls
-  const fetchPipelineData = (silent = false) => {
+  const fetchPipelineData = useCallback((silent = false) => {
     queryClient.invalidateQueries({ queryKey: ['deals'] });
     queryClient.invalidateQueries({ queryKey: ['tasks'] });
     queryClient.invalidateQueries({ queryKey: ['pipelines'] });
     queryClient.invalidateQueries({ queryKey: ['stats'] });
-  };
+  }, [queryClient]);
 
   // --- Filtering Logic (Client-Side Search Only) ---
   const filteredDeals = useMemo(() => {
     // 1. Text Search (Client-Side)
     let outcome = deals;
 
-    // Optimistic / Client-side filtering for Search Term
-    // Because server-side fulltext search might be overkill if we already have the relevant subset
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
       outcome = outcome.filter(deal => {
@@ -510,33 +602,37 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     return Array.from(keys);
   }, [deals]);
 
-  const getColumnDeals = (pipelineId: string) => {
-    return filteredDeals.filter(deal => deal.pipeline_id === pipelineId);
-  };
+  // 🔹 Optimized: Group Deals by Column (O(N)) once, instead of filtering O(N) per column
+  const dealsByColumn = useMemo(() => {
+    const map = new Map<string, DealWithAssignee[]>();
+    filteredDeals.forEach(deal => {
+      if (!map.has(deal.pipeline_id)) map.set(deal.pipeline_id, []);
+      map.get(deal.pipeline_id)?.push(deal);
+    });
+    return map;
+  }, [filteredDeals]);
+
+  const getColumnDeals = useCallback((pipelineId: string) => {
+    return dealsByColumn.get(pipelineId) || [];
+  }, [dealsByColumn]);
 
   // ... other handlers ...
-  // Update calculateColumnTotal to use filteredDeals if you want the totals to reflect filters.
-  // Generally, Kanban totals usually reflect visible items. 
 
-  const calculateColumnTotal = (pipelineId: string) => {
-    const columnDeals = getColumnDeals(pipelineId);
-    return columnDeals.reduce((sum, deal) => sum + (deal.value || 0), 0);
-  };
 
   // --- Column Actions ---
-  const handleAddColumn = () => {
+  const handleAddColumn = useCallback(() => {
     setEditingColumn(null);
     setColumnNameInput('');
     setIsColumnModalOpen(true);
-  };
+  }, []);
 
-  const handleEditColumn = (column: PipelineElement) => {
+  const handleEditColumn = useCallback((column: PipelineElement) => {
     setEditingColumn(column);
     setColumnNameInput(column.name);
     setIsColumnModalOpen(true);
-  };
+  }, []);
 
-  const handleDeleteColumn = async (columnId: string) => {
+  const handleDeleteColumn = useCallback(async (columnId: string) => {
     const columnDeals = getColumnDeals(columnId);
     if (columnDeals.length > 0) {
       alert('Não é possível excluir uma coluna com leads. Mova ou exclua os leads primeiro.');
@@ -552,7 +648,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       console.error('Error deleting column:', error);
       alert('Erro ao excluir coluna.');
     }
-  };
+  }, [getColumnDeals]);
 
   const handleSaveColumn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -587,10 +683,10 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
 
 
   // --- Deal Actions ---
-  const handleOpenModal = (deal?: Deal, pipelineId?: string) => {
+  const handleOpenModal = useCallback((deal?: Deal, pipelineId?: string) => {
     setSelectedDeal(deal || (pipelineId ? { pipeline_id: pipelineId } : undefined));
     setIsModalOpen(true);
-  };
+  }, []);
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
@@ -699,7 +795,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     }
   };
 
-  const handleDeleteDeal = async (id: string | undefined) => { // Updated to accept ID or use selected
+  const handleDeleteDeal = useCallback(async (id: string | undefined) => { // Updated to accept ID or use selected
     const dealId = id || selectedDeal?.id;
     if (!dealId) return;
 
@@ -724,7 +820,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       alert('Erro ao excluir oportunidade.');
       setDeals(originalDeals);
     }
-  };
+  }, [selectedDeal?.id, deals, fetchPipelineData]);
 
   const handleBulkDelete = async (dealIds: string[]) => {
     if (!confirm(`Tem certeza que deseja mover ${dealIds.length} leads para a lixeira?`)) return;
@@ -900,7 +996,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     easing: 'cubic-bezier(0.25, 1, 0.5, 1)',
   };
 
-  const getTagColor = (tag: string) => {
+  const getTagColor = useCallback((tag: string) => {
     const map: Record<string, string> = {
       'ICMS': 'blue',
       'PIS/COFINS': 'purple',
@@ -910,7 +1006,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       'Planejamento': 'orange'
     };
     return map[tag] || 'blue';
-  };
+  }, []);
 
   const formatBRL = (val: number) => {
     if (val >= 1000000) return `R$ ${(val / 1000000).toFixed(1)}M`;
@@ -972,7 +1068,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
     }
   };
 
-  const handleCompleteTask = async (taskId: string) => {
+  const handleCompleteTask = useCallback(async (taskId: string) => {
     try {
       const { error } = await supabase
         .from('deal_tasks')
@@ -988,7 +1084,7 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
       console.error('Error completing task:', error);
       alert('Erro ao concluir tarefa.');
     }
-  };
+  }, [fetchPipelineData]);
 
 
   return (
@@ -1190,23 +1286,28 @@ export default function PipelinePage({ onNavigate, activePage }: PipelinePagePro
                   items={columns.map(c => c.id)}
                   strategy={horizontalListSortingStrategy}
                 >
-                  {columns.map((column) => (
-                    <PipelineColumn
-                      key={column.id}
-                      column={column}
-                      deals={getColumnDeals(column.id)}
-                      calculateTotal={calculateColumnTotal}
-                      getTagColor={getTagColor}
-                      handleOpenModal={handleOpenModal}
-                      handleDeleteDeal={handleDeleteDeal}
-                      onEditColumn={handleEditColumn}
-                      onDeleteColumn={handleDeleteColumn}
-                      onNavigate={onNavigate}
-                      canManageColumns={canManageColumns}
-                      onCompleteTask={handleCompleteTask}
-                      showDetails={showDetails}
-                    />
-                  ))}
+                  {columns.map((column) => {
+                    const columnDeals = getColumnDeals(column.id);
+                    const totalValue = columnDeals.reduce((sum, d) => sum + (d.value || 0), 0);
+
+                    return (
+                      <PipelineColumn
+                        key={column.id}
+                        column={column}
+                        deals={columnDeals}
+                        totalValue={totalValue}
+                        getTagColor={getTagColor}
+                        handleOpenModal={handleOpenModal}
+                        handleDeleteDeal={handleDeleteDeal}
+                        onEditColumn={handleEditColumn}
+                        onDeleteColumn={handleDeleteColumn}
+                        onNavigate={onNavigate}
+                        canManageColumns={canManageColumns}
+                        onCompleteTask={handleCompleteTask}
+                        showDetails={showDetails}
+                      />
+                    );
+                  })}
                 </SortableContext>
 
                 {/* Add Column Button (Inline) - Snap aligned too */}
